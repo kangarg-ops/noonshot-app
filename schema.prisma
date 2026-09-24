@@ -1,0 +1,45 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model Store {
+  ds_code String  @id
+  ds_name String
+  orders  Order[]
+}
+
+model Item {
+  item_zsku       String      @id
+  pbarcode        String
+  product_title   String
+  in_stock        Boolean     @default(true)
+  substitute_zsku String?
+  orderItems      OrderItem[]
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  ds_code   String
+  timestamp DateTime    @default(now())
+  items     OrderItem[]
+  store     Store       @relation(fields: [ds_code], references: [ds_code])
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  item_zsku String
+  zsku_qty  Int
+  order     Order  @relation(fields: [orderId], references: [id])
+  item      Item   @relation(fields: [item_zsku], references: [item_zsku])
+}
+
+model Settings {
+  id         Int    @id @default(1)
+  cutoffTime String @default("19:00")
+}
