@@ -12,6 +12,7 @@ export default function AdminPortal() {
   const [itemZsku, setItemZsku] = useState("");
   const [itemBarcode, setItemBarcode] = useState("");
   const [itemTitle, setItemTitle] = useState("");
+  const [itemImage, setItemImage] = useState("");
   const [itemSub, setItemSub] = useState("");
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export default function AdminPortal() {
           item_zsku: itemZsku, 
           pbarcode: itemBarcode, 
           product_title: itemTitle, 
+          imageUrl: itemImage,
           substitute_zsku: itemSub 
         }),
       });
@@ -79,6 +81,7 @@ export default function AdminPortal() {
         setItemZsku("");
         setItemBarcode("");
         setItemTitle("");
+        setItemImage("");
         setItemSub("");
       } else {
         alert("Failed to add ingredient. Check if SKU already exists.");
@@ -158,8 +161,9 @@ export default function AdminPortal() {
         <form onSubmit={addItem} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <input type="text" placeholder="Item ZSKU" required value={itemZsku} onChange={(e) => setItemZsku(e.target.value)} className="border p-2 rounded" />
-            <input type="text" placeholder="Barcode (pbarcode)" required value={itemBarcode} onChange={(e) => setItemBarcode(e.target.value)} className="border p-2 rounded" />
+            <input type="text" placeholder="Barcodes (comma separated if multiple)" required value={itemBarcode} onChange={(e) => setItemBarcode(e.target.value)} className="border p-2 rounded" />
             <input type="text" placeholder="Product Title" required value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} className="border p-2 rounded col-span-2" />
+            <input type="url" placeholder="Image URL (Optional)" value={itemImage} onChange={(e) => setItemImage(e.target.value)} className="border p-2 rounded col-span-2" />
             <input type="text" placeholder="Substitute ZSKU (Optional)" value={itemSub} onChange={(e) => setItemSub(e.target.value)} className="border p-2 rounded col-span-2" />
           </div>
           <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700">Add Ingredient</button>

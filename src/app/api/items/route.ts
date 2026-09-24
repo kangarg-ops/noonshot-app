@@ -15,12 +15,13 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { item_zsku, pbarcode, product_title, in_stock, substitute_zsku } = body;
+    const { item_zsku, pbarcode, product_title, imageUrl, in_stock, substitute_zsku } = body;
     const item = await prisma.item.create({
       data: { 
         item_zsku, 
         pbarcode, 
         product_title, 
+        imageUrl: imageUrl || null,
         in_stock: in_stock ?? true, 
         substitute_zsku: substitute_zsku || null 
       }

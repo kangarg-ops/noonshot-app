@@ -130,14 +130,19 @@ export default function BaristaPortal() {
       <div className="space-y-4 mb-6">
         {items.map((item) => (
           <div key={item.item_zsku} className="flex justify-between items-center p-4 bg-noonGray rounded border border-gray-300">
-            <div>
-              <h3 className="font-semibold">{item.product_title}</h3>
-              <p className="text-sm text-gray-500">SKU: {item.item_zsku}</p>
-              {!item.in_stock && item.substitute_zsku && (
-                <p className="text-xs text-orange-600 font-medium mt-1">
-                  Out of stock. Will be substituted.
-                </p>
+            <div className="flex items-center space-x-4">
+              {item.imageUrl && (
+                <img src={item.imageUrl} alt={item.product_title} className="w-16 h-16 object-cover rounded" />
               )}
+              <div>
+                <h3 className="font-semibold">{item.product_title}</h3>
+                <p className="text-sm text-gray-500">SKU: {item.item_zsku}</p>
+                {!item.in_stock && item.substitute_zsku && (
+                  <p className="text-xs text-orange-600 font-medium mt-1">
+                    Out of stock. Will be substituted.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex items-center space-x-3">
               <button
