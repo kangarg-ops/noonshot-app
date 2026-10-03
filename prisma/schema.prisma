@@ -20,6 +20,8 @@ model Item {
   pbarcode        String
   product_title   String
   brand           String?
+  unit_size       String?
+  unit_type       String?
   imageUrl        String?
   in_stock        Boolean     @default(true)
   substitute_zsku String?
