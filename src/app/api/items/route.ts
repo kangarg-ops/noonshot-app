@@ -52,3 +52,15 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Failed to update item' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const item_zsku = searchParams.get('item_zsku');
+    if (!item_zsku) return NextResponse.json({ error: 'item_zsku required' }, { status: 400 });
+    await prisma.item.delete({ where: { item_zsku } });
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to delete item' }, { status: 500 });
+  }
+}

@@ -123,6 +123,16 @@ export default function AdminPortal() {
     }
   };
 
+  const removeItem = async (item_zsku: string, product_title: string) => {
+    if (!confirm(`Are you sure you want to permanently remove "${product_title}"?`)) return;
+    try {
+      await fetch(`/api/items?item_zsku=${encodeURIComponent(item_zsku)}`, { method: "DELETE" });
+      loadData();
+    } catch (e) {
+      alert("Error removing item");
+    }
+  };
+
   const updateMaxQty = async (item_zsku: string, max_qty: string) => {
     try {
       await fetch("/api/items", {
@@ -253,6 +263,12 @@ export default function AdminPortal() {
                   className={`px-3 py-1 text-sm rounded font-bold ${i.in_stock ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
                 >
                   {i.in_stock ? "In Stock" : "Out of Stock"}
+                </button>
+                <button
+                  onClick={() => removeItem(i.item_zsku, i.product_title)}
+                  className="px-3 py-1 text-sm rounded font-bold bg-gray-100 text-red-500 hover:bg-red-100"
+                >
+                  Remove
                 </button>
               </div>
             </div>
