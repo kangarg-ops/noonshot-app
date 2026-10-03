@@ -8,18 +8,24 @@ datasource db {
 }
 
 model Store {
-  ds_code String  @id
-  ds_name String
-  orders  Order[]
+  ds_code    String  @id
+  ds_name    String
+  store_type String  @default("SHOT")
+  isActive   Boolean @default(true)
+  orders     Order[]
 }
 
 model Item {
   item_zsku       String      @id
   pbarcode        String
   product_title   String
+  brand           String?
   imageUrl        String?
   in_stock        Boolean     @default(true)
   substitute_zsku String?
+  item_type       String      @default("GENERAL")
+  category        String      @default("INGREDIENTS")
+  max_qty         Int?
   orderItems      OrderItem[]
 }
 

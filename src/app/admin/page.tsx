@@ -13,6 +13,7 @@ export default function AdminPortal() {
   const [itemZsku, setItemZsku] = useState("");
   const [itemBarcode, setItemBarcode] = useState("");
   const [itemTitle, setItemTitle] = useState("");
+  const [itemBrand, setItemBrand] = useState("");
   const [itemImage, setItemImage] = useState("");
   const [itemSub, setItemSub] = useState("");
   const [itemType, setItemType] = useState("GENERAL");
@@ -94,13 +95,13 @@ export default function AdminPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           item_zsku: itemZsku, pbarcode: itemBarcode, product_title: itemTitle, 
-          imageUrl: itemImage, substitute_zsku: itemSub,
+          brand: itemBrand, imageUrl: itemImage, substitute_zsku: itemSub,
           item_type: itemType, category: itemCategory, max_qty: itemMaxQty 
         }),
       });
       if (res.ok) {
         alert("Item added successfully!");
-        setItemZsku(""); setItemBarcode(""); setItemTitle(""); setItemImage(""); setItemSub(""); setItemMaxQty("");
+        setItemZsku(""); setItemBarcode(""); setItemTitle(""); setItemBrand(""); setItemImage(""); setItemSub(""); setItemMaxQty("");
         loadData();
       } else {
         alert("Failed to add item. Check if SKU already exists.");
@@ -226,6 +227,7 @@ export default function AdminPortal() {
             <input type="text" placeholder="Item ZSKU" required value={itemZsku} onChange={(e) => setItemZsku(e.target.value)} className="border p-2 rounded" />
             <input type="text" placeholder="Barcodes (comma separated)" required value={itemBarcode} onChange={(e) => setItemBarcode(e.target.value)} className="border p-2 rounded" />
             <input type="text" placeholder="Product Title" required value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} className="border p-2 rounded col-span-2" />
+            <input type="text" placeholder="Brand (e.g. SUBKO, noonSHOT, Barista)" value={itemBrand} onChange={(e) => setItemBrand(e.target.value)} className="border p-2 rounded col-span-2" />
             <select value={itemCategory} onChange={(e) => setItemCategory(e.target.value)} className="border p-2 rounded bg-white">
               <option value="INGREDIENTS">Category: Ingredients</option>
               <option value="COFFEE_BEANS">Category: Coffee Beans</option>
@@ -249,7 +251,7 @@ export default function AdminPortal() {
             <div key={i.item_zsku} className="flex justify-between items-center p-3 border-b last:border-0 bg-gray-50 mb-2 rounded">
               <div className="w-1/2">
                 <div className="font-bold text-sm">{i.product_title}</div>
-                <div className="text-xs text-gray-500">{i.item_zsku} | {i.category} | {i.item_type}</div>
+                <div className="text-xs text-gray-500">{i.item_zsku} {i.brand && <span className="text-blue-500 font-semibold">| {i.brand}</span>} | {i.category} | {i.item_type}</div>
               </div>
               <div className="flex items-center space-x-3 w-1/2 justify-end">
                 <div className="flex flex-col items-center">

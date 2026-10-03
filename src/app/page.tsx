@@ -141,6 +141,7 @@ export default function BaristaPortal() {
                       )}
                       <div>
                         <h3 className="font-bold text-gray-800">{item.product_title}</h3>
+                        {item.brand && <p className="text-xs font-semibold text-blue-600">{item.brand}</p>}
                         <p className="text-xs text-gray-500 font-medium">SKU: {item.item_zsku}</p>
                         
                         {!item.in_stock ? (
