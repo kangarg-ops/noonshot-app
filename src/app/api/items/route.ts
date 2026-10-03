@@ -43,7 +43,6 @@ export async function PUT(req: Request) {
     const updateData: any = {};
     if (in_stock !== undefined) updateData.in_stock = in_stock;
     if (max_qty !== undefined) updateData.max_qty = max_qty === "" ? null : parseInt(max_qty);
-
     const item = await prisma.item.update({
       where: { item_zsku },
       data: updateData
