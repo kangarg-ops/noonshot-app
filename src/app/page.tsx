@@ -5,59 +5,53 @@ export default function BaristaPortal() {
   const [stores, setStores] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [selectedStore, setSelectedStore] = useState<any>(null);
-  const [orderItems, setOrderItems] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    // Load store from localStorage if exists
-    const savedStore = localStorage.getItem("noonShot_store");
-    if (savedStore) {
-      setSelectedStore(JSON.parse(savedStore));
-    }
-
-    // Fetch stores and items
-    Promise.all([
-      fetch("/api/stores").then((res) => res.json()),
-      fetch("/api/items").then((res) => res.json()),
-    ]).then(([storesData, itemsData]) => {
-      setStores(storesData);
-      setItems(itemsData);
-      setLoading(false);
-    });
+    fetch("/api/stores").then((res) => res.json()).then(setStores);
+    fetch("/api/items").then((res) => res.json()).then(setItems);
   }, []);
 
-  const handleStoreSelect = (store: any) => {
-    localStorage.setItem("noonShot_store", JSON.stringify(store));
+  const handleStoreChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const ds_code = e.target.value;
+    const store = stores.find(s => s.ds_code === ds_code);
     setSelectedStore(store);
+    setCart({}); // Reset cart on store change
   };
 
-  const logoutStore = () => {
-    localStorage.removeItem("noonShot_store");
-    setSelectedStore(null);
-    setOrderItems({});
-  };
-
-  const handleQtyChange = (zsku: string, qty: number) => {
-    setOrderItems((prev) => ({
+  const updateCart = (zsku: string, qty: number, max: number | null) => {
+    if (qty < 0) return;
+    if (max !== null && qty > max) {
+      alert(`Maximum order limit for this item is ${max}`);
+      return;
+    }
+    setCart((prev) => ({
       ...prev,
       [zsku]: qty,
     }));
   };
 
   const submitOrder = async () => {
-    const payloadItems = Object.entries(orderItems)
-      .filter(([_, qty]) => qty > 0)
-      .map(([zsku, qty]) => {
-        // Substitute logic: if item is not in stock, replace with substitute if available
-        const item = items.find((i) => i.item_zsku === zsku);
+    if (!selectedStore) return;
+    setIsSubmitting(true);
+    
+    // Prepare items, substituting if out of stock
+    const orderPayloadItems = [];
+    for (const [zsku, qty] of Object.entries(cart)) {
+      if (qty > 0) {
+        const item = items.find(i => i.item_zsku === zsku);
         if (item && !item.in_stock && item.substitute_zsku) {
-          return { item_zsku: item.substitute_zsku, zsku_qty: qty };
+          orderPayloadItems.push({ item_zsku: item.substitute_zsku, zsku_qty: qty });
+        } else {
+          orderPayloadItems.push({ item_zsku: zsku, zsku_qty: qty });
         }
-        return { item_zsku: zsku, zsku_qty: qty };
-      });
+      }
+    }
 
-    if (payloadItems.length === 0) {
-      alert("Please add at least one item to order.");
+    if (orderPayloadItems.length === 0) {
+      alert("Cart is empty");
+      setIsSubmitting(false);
       return;
     }
 
@@ -67,116 +61,144 @@ export default function BaristaPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ds_code: selectedStore.ds_code,
-          items: payloadItems,
+          items: orderPayloadItems
         }),
       });
 
       if (res.ok) {
         alert("Order submitted successfully!");
-        setOrderItems({}); // Reset form
+        setCart({});
       } else {
-        alert("Failed to submit order.");
+        const err = await res.json();
+        alert(err.error || "Failed to submit order");
       }
     } catch (e) {
-      alert("Error submitting order.");
+      alert("Error submitting order");
     }
+    setIsSubmitting(false);
   };
 
-  if (loading) {
-    return <div>Loading...</div>;
-  }
+  // Filter items based on selected store type
+  const filteredItems = items.filter(item => {
+    if (!selectedStore) return false;
+    if (item.item_type === "GENERAL") return true;
+    if (selectedStore.store_type === "NATIVE" && item.item_type === "NATIVE_ONLY") return true;
+    if (selectedStore.store_type === "SHOT" && item.item_type === "SHOT_ONLY") return true;
+    return false;
+  });
 
-  // STORE SELECTION VIEW
-  if (!selectedStore) {
-    return (
-      <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-10 border border-gray-200">
-        <h1 className="text-2xl font-bold mb-4 text-center">Select Your Store</h1>
-        <div className="space-y-4">
-          {stores.map((store) => (
-            <button
-              key={store.ds_code}
-              onClick={() => handleStoreSelect(store)}
-              className="w-full text-left p-4 rounded-lg bg-noonGray hover:bg-noonYellow transition border border-gray-300 font-semibold"
-            >
-              {store.ds_name} <span className="text-sm text-gray-500 font-normal">({store.ds_code})</span>
-            </button>
-          ))}
-          {stores.length === 0 && (
-            <p className="text-gray-500 text-center">No stores available.</p>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // Group by category
+  const groupedItems = filteredItems.reduce((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {} as Record<string, any[]>);
 
-  // ORDERING VIEW
+  const totalItems = Object.values(cart).reduce((a, b) => a + b, 0);
+
   return (
-    <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md border border-gray-200">
-      <div className="flex justify-between items-center mb-6 pb-4 border-b">
-        <div>
-          <h1 className="text-2xl font-bold">New Order</h1>
-          <p className="text-gray-600">
-            Store: <span className="font-semibold">{selectedStore.ds_name}</span> ({selectedStore.ds_code})
-          </p>
-        </div>
-        <button
-          onClick={logoutStore}
-          className="text-sm text-red-600 hover:underline"
-        >
-          Change Store
-        </button>
+    <div className="max-w-3xl mx-auto pb-24">
+      {/* Header */}
+      <div className="bg-noonYellow text-noonBlack p-6 rounded-b-xl shadow-md mb-8 text-center">
+        <h1 className="text-3xl font-black tracking-tight mb-2">noonSHOT Ordering</h1>
+        <p className="font-medium text-gray-800">Daily Ingredient Requisition Portal</p>
       </div>
 
-      <div className="space-y-4 mb-6">
-        {items.map((item) => (
-          <div key={item.item_zsku} className="flex justify-between items-center p-4 bg-noonGray rounded border border-gray-300">
-            <div className="flex items-center space-x-4">
-              {item.imageUrl && (
-                <img src={item.imageUrl} alt={item.product_title} className="w-16 h-16 object-cover rounded" />
-              )}
-              <div>
-                <h3 className="font-semibold">{item.product_title}</h3>
-                <p className="text-sm text-gray-500">SKU: {item.item_zsku}</p>
-                {!item.in_stock && item.substitute_zsku && (
-                  <p className="text-xs text-orange-600 font-medium mt-1">
-                    Out of stock. Will be substituted.
-                  </p>
-                )}
+      {/* Store Selection */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+        <label className="block text-sm font-bold text-gray-700 mb-2">Select Your Store</label>
+        <select 
+          className="w-full border-2 border-gray-300 p-3 rounded-lg bg-gray-50 focus:outline-none focus:border-noonBlack font-medium"
+          onChange={handleStoreChange}
+          defaultValue=""
+        >
+          <option value="" disabled>-- Choose a store --</option>
+          {stores.map((s) => (
+            <option key={s.ds_code} value={s.ds_code}>
+              {s.ds_name} ({s.ds_code}) {s.store_type === "NATIVE" ? "⭐ NATIVE" : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Item List by Category */}
+      {selectedStore && (
+        <>
+          {Object.entries(groupedItems).map(([category, catItems]: [string, any[]]) => (
+            <div key={category} className="mb-8">
+              <h2 className="text-xl font-bold mb-4 border-b-2 border-noonYellow pb-2 inline-block">
+                {category.replace("_", " ")}
+              </h2>
+              <div className="space-y-4">
+                {catItems.map((item) => (
+                  <div key={item.item_zsku} className="flex justify-between items-center p-4 bg-noonGray rounded-xl border border-gray-200 shadow-sm">
+                    <div className="flex items-center space-x-4">
+                      {item.imageUrl && (
+                        <img src={item.imageUrl} alt={item.product_title} className="w-16 h-16 object-cover rounded-lg shadow-sm" />
+                      )}
+                      <div>
+                        <h3 className="font-bold text-gray-800">{item.product_title}</h3>
+                        <p className="text-xs text-gray-500 font-medium">SKU: {item.item_zsku}</p>
+                        
+                        {!item.in_stock ? (
+                          item.substitute_zsku ? (
+                            <p className="text-xs text-orange-600 font-bold mt-1 bg-orange-100 inline-block px-2 py-0.5 rounded">
+                              Will be substituted automatically
+                            </p>
+                          ) : (
+                            <p className="text-xs text-red-600 font-bold mt-1 bg-red-100 inline-block px-2 py-0.5 rounded">
+                              Out of Stock
+                            </p>
+                          )
+                        ) : null}
+
+                        {item.max_qty && (
+                          <p className="text-xs text-blue-600 font-medium mt-1">Limit: {item.max_qty} per order</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 bg-white border rounded-lg p-1">
+                      <button
+                        onClick={() => updateCart(item.item_zsku, (cart[item.item_zsku] || 0) - 1, item.max_qty)}
+                        disabled={!item.in_stock && !item.substitute_zsku}
+                        className="w-8 h-8 flex items-center justify-center bg-gray-100 rounded text-gray-600 font-bold hover:bg-gray-200 disabled:opacity-50"
+                      >
+                        -
+                      </button>
+                      <span className="w-6 text-center font-bold text-lg">
+                        {cart[item.item_zsku] || 0}
+                      </span>
+                      <button
+                        onClick={() => updateCart(item.item_zsku, (cart[item.item_zsku] || 0) + 1, item.max_qty)}
+                        disabled={!item.in_stock && !item.substitute_zsku}
+                        className="w-8 h-8 flex items-center justify-center bg-noonYellow rounded text-noonBlack font-bold hover:bg-yellow-400 disabled:opacity-50"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="flex items-center space-x-3">
-              <button
-                className="w-8 h-8 flex items-center justify-center bg-gray-300 rounded hover:bg-gray-400 font-bold"
-                onClick={() => handleQtyChange(item.item_zsku, Math.max(0, (orderItems[item.item_zsku] || 0) - 1))}
-              >
-                -
-              </button>
-              <input
-                type="number"
-                min="0"
-                value={orderItems[item.item_zsku] || ""}
-                placeholder="0"
-                onChange={(e) => handleQtyChange(item.item_zsku, parseInt(e.target.value) || 0)}
-                className="w-16 text-center border p-1 rounded"
-              />
-              <button
-                className="w-8 h-8 flex items-center justify-center bg-gray-300 rounded hover:bg-gray-400 font-bold"
-                onClick={() => handleQtyChange(item.item_zsku, (orderItems[item.item_zsku] || 0) + 1)}
-              >
-                +
-              </button>
-            </div>
-          </div>
-        ))}
-        {items.length === 0 && <p className="text-gray-500 text-center">No items available.</p>}
-      </div>
+          ))}
 
-      <button
-        onClick={submitOrder}
-        className="w-full bg-noonYellow text-noonBlack font-bold py-3 rounded-lg hover:bg-yellow-400 transition"
-      >
-        Submit Order
-      </button>
+          {/* Sticky Checkout Bar */}
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-between items-center max-w-3xl mx-auto z-50">
+            <div>
+              <p className="text-sm text-gray-500 font-bold">Total Items</p>
+              <p className="text-2xl font-black">{totalItems}</p>
+            </div>
+            <button
+              onClick={submitOrder}
+              disabled={totalItems === 0 || isSubmitting}
+              className="bg-noonBlack text-white px-8 py-3 rounded-lg font-bold text-lg hover:bg-gray-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSubmitting ? "Submitting..." : "Submit Order"}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
