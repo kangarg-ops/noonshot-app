@@ -141,8 +141,13 @@ export default function BaristaPortal() {
                       )}
                       <div>
                         <h3 className="font-bold text-gray-800">{item.product_title}</h3>
-                        {item.brand && <p className="text-xs font-semibold text-blue-600">{item.brand}</p>}
-                        <p className="text-xs text-gray-500 font-medium">SKU: {item.item_zsku}</p>
+                        <div className="flex items-center space-x-2 flex-wrap">
+                          {item.brand && <span className="text-xs font-semibold text-blue-600">{item.brand}</span>}
+                          {item.unit_size && item.unit_type && (
+                            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{item.unit_size} {item.unit_type}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400">SKU: {item.item_zsku}</p>
                         
                         {!item.in_stock ? (
                           item.substitute_zsku ? (

@@ -14,6 +14,8 @@ export default function AdminPortal() {
   const [itemBarcode, setItemBarcode] = useState("");
   const [itemTitle, setItemTitle] = useState("");
   const [itemBrand, setItemBrand] = useState("");
+  const [itemUnitSize, setItemUnitSize] = useState("");
+  const [itemUnitType, setItemUnitType] = useState("ml");
   const [itemImage, setItemImage] = useState("");
   const [itemSub, setItemSub] = useState("");
   const [itemType, setItemType] = useState("GENERAL");
@@ -22,6 +24,7 @@ export default function AdminPortal() {
 
   const [stores, setStores] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
+  const [editingItem, setEditingItem] = useState<any>(null);
 
   const loadData = () => {
     fetch("/api/stores").then(r => r.json()).then(setStores);
@@ -95,13 +98,14 @@ export default function AdminPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           item_zsku: itemZsku, pbarcode: itemBarcode, product_title: itemTitle, 
-          brand: itemBrand, imageUrl: itemImage, substitute_zsku: itemSub,
+          brand: itemBrand, unit_size: itemUnitSize, unit_type: itemUnitType,
+          imageUrl: itemImage, substitute_zsku: itemSub,
           item_type: itemType, category: itemCategory, max_qty: itemMaxQty 
         }),
       });
       if (res.ok) {
         alert("Item added successfully!");
-        setItemZsku(""); setItemBarcode(""); setItemTitle(""); setItemBrand(""); setItemImage(""); setItemSub(""); setItemMaxQty("");
+        setItemZsku(""); setItemBarcode(""); setItemTitle(""); setItemBrand(""); setItemUnitSize(""); setItemUnitType("ml"); setItemImage(""); setItemSub(""); setItemMaxQty("");
         loadData();
       } else {
         alert("Failed to add item. Check if SKU already exists.");
@@ -134,6 +138,26 @@ export default function AdminPortal() {
     }
   };
 
+  const saveEdit = async () => {
+    if (!editingItem) return;
+    try {
+      const res = await fetch("/api/items", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingItem),
+      });
+      if (res.ok) {
+        alert("Item updated successfully!");
+        setEditingItem(null);
+        loadData();
+      } else {
+        alert("Failed to update item.");
+      }
+    } catch (e) {
+      alert("Error updating item");
+    }
+  };
+
   const updateMaxQty = async (item_zsku: string, max_qty: string) => {
     try {
       await fetch("/api/items", {
@@ -150,6 +174,46 @@ export default function AdminPortal() {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
       <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-3 max-h-screen overflow-y-auto">
+            <h2 className="text-xl font-bold mb-2">Edit Item</h2>
+            <p className="text-xs text-gray-400 mb-2">SKU: {editingItem.item_zsku}</p>
+            <input type="text" placeholder="Product Title" value={editingItem.product_title || ""} onChange={e => setEditingItem({...editingItem, product_title: e.target.value})} className="border p-2 rounded w-full" />
+            <input type="text" placeholder="Brand" value={editingItem.brand || ""} onChange={e => setEditingItem({...editingItem, brand: e.target.value})} className="border p-2 rounded w-full" />
+            <div className="flex space-x-2">
+              <input type="text" placeholder="Unit Size (e.g. 250)" value={editingItem.unit_size || ""} onChange={e => setEditingItem({...editingItem, unit_size: e.target.value})} className="border p-2 rounded w-1/2" />
+              <select value={editingItem.unit_type || "ml"} onChange={e => setEditingItem({...editingItem, unit_type: e.target.value})} className="border p-2 rounded w-1/2 bg-white">
+                <option value="ml">ml</option>
+                <option value="L">Litres (L)</option>
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
+            <input type="text" placeholder="Barcodes (comma separated)" value={editingItem.pbarcode || ""} onChange={e => setEditingItem({...editingItem, pbarcode: e.target.value})} className="border p-2 rounded w-full" />
+            <input type="url" placeholder="Image URL" value={editingItem.imageUrl || ""} onChange={e => setEditingItem({...editingItem, imageUrl: e.target.value})} className="border p-2 rounded w-full" />
+            <input type="text" placeholder="Substitute ZSKU" value={editingItem.substitute_zsku || ""} onChange={e => setEditingItem({...editingItem, substitute_zsku: e.target.value})} className="border p-2 rounded w-full" />
+            <input type="number" placeholder="Max Order Qty" value={editingItem.max_qty || ""} onChange={e => setEditingItem({...editingItem, max_qty: e.target.value})} className="border p-2 rounded w-full" />
+            <select value={editingItem.category || "INGREDIENTS"} onChange={e => setEditingItem({...editingItem, category: e.target.value})} className="border p-2 rounded w-full bg-white">
+              <option value="INGREDIENTS">Ingredients</option>
+              <option value="COFFEE_BEANS">Coffee Beans</option>
+              <option value="PACKAGING">Packaging</option>
+            </select>
+            <select value={editingItem.item_type || "GENERAL"} onChange={e => setEditingItem({...editingItem, item_type: e.target.value})} className="border p-2 rounded w-full bg-white">
+              <option value="GENERAL">Available to ALL stores</option>
+              <option value="SHOT_ONLY">SHOT stores only</option>
+              <option value="NATIVE_ONLY">NATIVE stores only</option>
+            </select>
+            <div className="flex space-x-3 pt-2">
+              <button onClick={saveEdit} className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 flex-1">Save Changes</button>
+              <button onClick={() => setEditingItem(null)} className="bg-gray-200 text-gray-700 px-6 py-2 rounded font-bold hover:bg-gray-300 flex-1">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Section */}
       <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
@@ -227,7 +291,17 @@ export default function AdminPortal() {
             <input type="text" placeholder="Item ZSKU" required value={itemZsku} onChange={(e) => setItemZsku(e.target.value)} className="border p-2 rounded" />
             <input type="text" placeholder="Barcodes (comma separated)" required value={itemBarcode} onChange={(e) => setItemBarcode(e.target.value)} className="border p-2 rounded" />
             <input type="text" placeholder="Product Title" required value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} className="border p-2 rounded col-span-2" />
-            <input type="text" placeholder="Brand (e.g. SUBKO, noonSHOT, Barista)" value={itemBrand} onChange={(e) => setItemBrand(e.target.value)} className="border p-2 rounded col-span-2" />
+            <input type="text" placeholder="Brand (e.g. SUBKO, noonSHOT)" value={itemBrand} onChange={(e) => setItemBrand(e.target.value)} className="border p-2 rounded col-span-2" />
+            <div className="flex space-x-2 col-span-2">
+              <input type="text" placeholder="Unit Size (e.g. 250, 1)" value={itemUnitSize} onChange={(e) => setItemUnitSize(e.target.value)} className="border p-2 rounded w-1/2" />
+              <select value={itemUnitType} onChange={(e) => setItemUnitType(e.target.value)} className="border p-2 rounded w-1/2 bg-white">
+                <option value="ml">ml</option>
+                <option value="L">Litres (L)</option>
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="pcs">pcs</option>
+              </select>
+            </div>
             <select value={itemCategory} onChange={(e) => setItemCategory(e.target.value)} className="border p-2 rounded bg-white">
               <option value="INGREDIENTS">Category: Ingredients</option>
               <option value="COFFEE_BEANS">Category: Coffee Beans</option>
@@ -265,6 +339,13 @@ export default function AdminPortal() {
                   className={`px-3 py-1 text-sm rounded font-bold ${i.in_stock ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
                 >
                   {i.in_stock ? "In Stock" : "Out of Stock"}
+                </button>
+                <button
+                  onClick={() => setEditingItem({...i})}
+                  className="px-3 py-1 text-sm rounded font-bold bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600"
+                  title="Edit item"
+                >
+                  ✏️
                 </button>
                 <button
                   onClick={() => removeItem(i.item_zsku, i.product_title)}
