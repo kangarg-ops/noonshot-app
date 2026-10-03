@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { item_zsku, pbarcode, product_title, brand, imageUrl, in_stock, substitute_zsku, item_type, category, max_qty } = body;
-    const item = await prisma.item.create({
+    const item = await (prisma.item.create as any)({
       data: { 
         item_zsku, 
         pbarcode, 
