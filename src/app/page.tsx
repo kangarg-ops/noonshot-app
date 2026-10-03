@@ -124,7 +124,10 @@ export default function BaristaPortal() {
       {/* Item List by Category */}
       {selectedStore && (
         <>
-          {Object.entries(groupedItems).map(([category, catItems]: [string, any[]]) => (
+          {Object.entries(groupedItems).map((entry) => {
+            const category = entry[0];
+            const catItems = entry[1] as any[];
+            return (
             <div key={category} className="mb-8">
               <h2 className="text-xl font-bold mb-4 border-b-2 border-noonYellow pb-2 inline-block">
                 {category.replace("_", " ")}
@@ -181,7 +184,8 @@ export default function BaristaPortal() {
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {/* Sticky Checkout Bar */}
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-between items-center max-w-3xl mx-auto z-50">
