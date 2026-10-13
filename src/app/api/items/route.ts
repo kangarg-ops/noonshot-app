@@ -1,3 +1,17 @@
+import { NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET() {
+  try {
+    const items = await prisma.$queryRawUnsafe(`SELECT * FROM "Item" ORDER BY product_title ASC`);
+    return NextResponse.json(items);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const b = await req.json();
@@ -23,6 +37,47 @@ export async function POST(req: Request) {
       b.max_qty ? parseInt(b.max_qty) : null
     );
     return NextResponse.json({ success: true, item_zsku: b.item_zsku });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function PUT(req: Request) {
+  try {
+    const b = await req.json();
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let i = 1;
+    const fields: Record<string, any> = {
+      pbarcode: b.pbarcode, product_title: b.product_title,
+      brand: b.brand ?? undefined, unit_size: b.unit_size ?? undefined,
+      unit_type: b.unit_type ?? undefined, imageUrl: b.imageUrl ?? undefined,
+      in_stock: b.in_stock, substitute_zsku: b.substitute_zsku ?? undefined,
+      item_type: b.item_type, category: b.category,
+      max_qty: b.max_qty !== undefined ? (b.max_qty === '' ? null : parseInt(b.max_qty)) : undefined
+    };
+    for (const [key, val] of Object.entries(fields)) {
+      if (val !== undefined) {
+        sets.push(`"${key}" = $${i++}`);
+        vals.push(val === '' ? null : val);
+      }
+    }
+    if (sets.length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+    vals.push(b.item_zsku);
+    await prisma.$executeRawUnsafe(`UPDATE "Item" SET ${sets.join(', ')} WHERE item_zsku = $${i}`, ...vals);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const item_zsku = searchParams.get('item_zsku');
+    if (!item_zsku) return NextResponse.json({ error: 'item_zsku required' }, { status: 400 });
+    await prisma.$executeRawUnsafe(`DELETE FROM "Item" WHERE item_zsku = $1`, item_zsku);
+    return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
