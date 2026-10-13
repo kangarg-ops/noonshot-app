@@ -270,7 +270,7 @@ export default function BaristaPortal() {
           No items currently available for this store type.
         </div>
       ) : (
-        Object.entries(groupedItems).map(([category, catItems]) => (
+        (Object.entries(groupedItems) as [string, any[]][]).map(([category, catItems]) => (
           <div key={category} className="mb-8">
             <h2 className="text-lg font-black tracking-wide text-gray-800 uppercase mb-3 flex items-center space-x-2">
               <span>{category.replace('_', ' ')}</span>
