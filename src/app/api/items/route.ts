@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-// This forces Next.js to fetch fresh data every time instead of caching an empty list
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
