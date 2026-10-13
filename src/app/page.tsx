@@ -85,14 +85,14 @@ export default function BaristaPortal() {
   };
 
   const updateCart = (zsku: string, qty: number, max: number | null) => {
-    if (qty < 0) return;
-    if (max !== null && qty > max) {
+    const finalQty = Math.max(0, isNaN(qty) ? 0 : qty); // Strictly minimum 0
+    if (max !== null && max !== undefined && max > 0 && finalQty > max) {
       alert(`Maximum order limit for this item is ${max}`);
       return;
     }
     setCart((prev) => ({
       ...prev,
-      [zsku]: qty,
+      [zsku]: finalQty,
     }));
   };
 
@@ -342,20 +342,28 @@ export default function BaristaPortal() {
                     </div>
                   </div>
 
-                  {/* Quantity Controls */}
-                  <div className="flex items-center space-x-2">
+                  {/* Quantity Controls - Min 0 */}
+                  <div className="flex items-center space-x-1.5">
                     <button 
+                      type="button"
                       onClick={() => updateCart(item.item_zsku, (cart[item.item_zsku] || 0) - 1, item.max_qty)}
-                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center font-bold text-gray-700 hover:bg-gray-100"
+                      disabled={(cart[item.item_zsku] || 0) <= 0}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-25 disabled:cursor-not-allowed transition"
                     >
                       -
                     </button>
-                    <span className="w-8 text-center font-bold text-sm">
-                      {cart[item.item_zsku] || 0}
-                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={item.max_qty || undefined}
+                      value={cart[item.item_zsku] ?? 0}
+                      onChange={(e) => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item.max_qty)}
+                      className="w-14 text-center font-bold text-sm border rounded py-1 bg-white focus:outline-none focus:ring-1 focus:ring-yellow-400"
+                    />
                     <button 
+                      type="button"
                       onClick={() => updateCart(item.item_zsku, (cart[item.item_zsku] || 0) + 1, item.max_qty)}
-                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center font-bold text-gray-700 hover:bg-gray-100"
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center font-bold text-gray-700 hover:bg-gray-100 transition"
                     >
                       +
                     </button>
