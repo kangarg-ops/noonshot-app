@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "noonSHOT Ordering",
-  description: "Barista ordering system for noonSHOT",
+  title: "noon Cafe Ordering | SHOT & NATIVE",
+  description: "Official barista ordering portal for noon SHOT and NATIVE cafes",
 };
 
 export default function RootLayout({
@@ -13,11 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">
-        <header className="bg-noonYellow text-noonBlack p-4 font-bold text-xl shadow-md">
-          <div className="container mx-auto">noonSHOT Ordering</div>
-        </header>
-        <main className="container mx-auto p-4">{children}</main>
+      <body className="min-h-screen antialiased bg-[#F8F6F2] text-gray-900">
+        {children}
       </body>
     </html>
   );
