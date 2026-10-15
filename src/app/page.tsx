@@ -143,7 +143,21 @@ export default function BaristaPortal() {
   const sections = useMemo(() => {
     const isMilk = (i: any) => {
       const t = (i.product_title || "").toLowerCase();
-      return t.includes("milk") || t.includes("oat") || t.includes("almond") || t.includes("coconut cream");
+      if (
+        t.includes("clean") ||
+        t.includes("everclean") ||
+        t.includes("ball") ||
+        t.includes("liquid") ||
+        t.includes("cream") ||
+        t.includes("tablet") ||
+        t.includes("descal") ||
+        t.includes("powder") ||
+        t.includes("syrup") ||
+        t.includes("sauce")
+      ) {
+        return false;
+      }
+      return t.includes("milk") || t.includes("oat") || t.includes("almond") || t.includes("dairy") || t.includes("soy");
     };
 
     const isBean = (i: any) => {
@@ -241,7 +255,7 @@ export default function BaristaPortal() {
           id: "SHOT_MILKS",
           title: "🥛 Barista Milks",
           badge: "Dairy & Plant Milks",
-          desc: "Oat milk, Coconut milk & Almond milk barista formulations.",
+          desc: "Oat milk, Almond milk & barista dairy / plant milk formulations.",
           items: milks,
           subsections: []
         },
@@ -249,7 +263,7 @@ export default function BaristaPortal() {
           id: "SHOT_INGREDIENTS",
           title: "🍯 Ingredients & Essentials",
           badge: "Syrups & Supplies",
-          desc: "All syrups, sauces, frappe powders, chai, matcha & cafe cleaning essentials.",
+          desc: "All syrups, sauces, frappe powders, coconut cream, chai, matcha, cleaning liquids & essentials.",
           items: ingredients,
           subsections: []
         }
