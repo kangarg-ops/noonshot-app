@@ -199,9 +199,9 @@ export default function BaristaPortal() {
         },
         {
           id: "NATIVE_INGREDIENTS",
-          title: "🥛 Ingredients & Essentials (inc. ISI Chargers)",
-          badge: "Syrups, Milks & ISI",
-          desc: "All syrups, sauces, frappe mixes, barista milks, powders & ISI cream chargers.",
+          title: "🥛 Ingredients & Essentials",
+          badge: "Syrups, Milks & Powders",
+          desc: "All syrups, sauces, frappe mixes, barista milks, powders & supplies.",
           items: ingredients,
           subsections: []
         },
@@ -247,9 +247,9 @@ export default function BaristaPortal() {
         },
         {
           id: "SHOT_INGREDIENTS",
-          title: "🍯 All Ingredients & Essentials (inc. ISI Chargers)",
-          badge: "Syrups & Chargers",
-          desc: "All syrups, sauces, frappe powders, chai, matcha, cleaning & ISI cream chargers.",
+          title: "🍯 Ingredients & Essentials",
+          badge: "Syrups & Supplies",
+          desc: "All syrups, sauces, frappe powders, chai, matcha & cafe cleaning essentials.",
           items: ingredients,
           subsections: []
         }
@@ -518,7 +518,7 @@ export default function BaristaPortal() {
           <div className="relative pt-0.5">
             <input
               type="text"
-              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, vanilla, oat milk, cups, isi...'}"`}
+              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, vanilla, oat milk, cups, essentials...'}"`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-stone-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none focus:ring-2 focus:ring-yellow-400"
