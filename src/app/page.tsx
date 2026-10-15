@@ -184,15 +184,15 @@ export default function BaristaPortal() {
       return [
         {
           id: "NATIVE_COFFEE",
-          title: "☕ Coffee Beans (SUBKO Specialty Coffee)",
+          title: "☕ Coffee Beans (SUBKO Speciality Coffee - NATIVE & NICHE)",
           badge: "SUBKO Collab",
-          desc: "Exclusive single-origin roasts crafted with Subko.",
+          desc: "NATIVE Blend & NICHE Blend from SUBKO.",
           items: subkoBeans,
           subsections: [
             {
               id: "NATIVE_DECAF",
-              title: "🌿 Decaf Beans (Specialty Decaf)",
-              desc: "Single-origin decaffeinated roast profiles.",
+              title: "🌿 Decaf Beans",
+              desc: "Decaffeinated single-origin coffee (Decaf Colombia Ground).",
               items: decafBeans,
             }
           ]
@@ -434,7 +434,7 @@ export default function BaristaPortal() {
         </div>
 
         <div className="max-w-md mx-auto w-full text-center text-xs text-stone-400">
-          noon Specialty Coffee Operations • Dubai & UAE Cafes
+          noon Speciality Coffee Operations • Dubai & UAE Cafes
         </div>
       </div>
     );
@@ -575,7 +575,7 @@ export default function BaristaPortal() {
                 </span>
                 <span className="font-extrabold text-sm tracking-wide">Barista Craft & Quality Standards</span>
               </div>
-              <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-bold">Specialty Coffee</span>
+              <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-bold">Speciality Coffee</span>
             </div>
 
             <div className="p-5 space-y-4">
