@@ -15,6 +15,7 @@ export default function BaristaPortal() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [isOrderSummaryOpen, setIsOrderSummaryOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"CATALOG" | "BRM_GUIDE">("CATALOG");
 
   useEffect(() => {
     const savedEmail = localStorage.getItem("noon_user_email");
@@ -132,7 +133,7 @@ export default function BaristaPortal() {
       });
 
       if (res.ok) {
-        alert("🎉 Order submitted successfully!");
+        alert("🎉 Store replenishment order submitted successfully!");
         setCart({});
         setIsOrderSummaryOpen(false);
       } else {
@@ -180,7 +181,7 @@ export default function BaristaPortal() {
       const matchesCat = 
         selectedCategory === "ALL" || 
         item.category === selectedCategory ||
-        (selectedCategory === "NATIVE_SPECIALTY" && item.product_title?.toLowerCase().includes("subko"));
+        (selectedCategory === "SUBKO_SPECIALTY" && item.product_title?.toLowerCase().includes("subko"));
 
       return matchesSearch && matchesCat;
     });
@@ -189,67 +190,57 @@ export default function BaristaPortal() {
   const totalItemsCount = Object.values(cart).reduce((a, b) => a + b, 0);
   const totalUniqueItems = Object.values(cart).filter(q => q > 0).length;
 
-  // Cafe wallpaper SVG pattern background (Coffee cups, beans, portafilters, steam, cafe elements)
+  // Cafe wallpaper background pattern with coffee cups, portafilter, beans, latte art, steam
   const cafeWallpaperStyle = {
     backgroundImage: `url("data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%238B5E3C' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' opacity='0.08'%3E%3C!-- Coffee Cup with Sleeve --%3E%3Cpath d='M25,25 L45,25 L41,60 L29,60 Z'/%3E%3Cpath d='M23,25 L47,25'/%3E%3Cpath d='M27,37 L43,37 L42,48 L28,48 Z'/%3E%3C!-- Steam --%3E%3Cpath d='M31,18 Q33,14 31,10'/%3E%3Cpath d='M39,18 Q41,14 39,10'/%3E%3C!-- Coffee Beans --%3E%3Cpath d='M120,35 C120,30 132,30 132,35 C132,40 120,40 120,35 Z'/%3E%3Cpath d='M123,32 Q126,35 129,38'/%3E%3Cpath d='M138,42 C138,37 150,37 150,42 C150,47 138,47 138,42 Z'/%3E%3Cpath d='M141,39 Q144,42 147,45'/%3E%3C!-- Portafilter Handle --%3E%3Ccircle cx='40' cy='135' r='12'/%3E%3Cpath d='M52,135 L80,135' stroke-width='2.2'/%3E%3Cpath d='M35,130 L45,130 L43,142 L37,142 Z'/%3E%3C!-- Ceramic Mug with Latte Art --%3E%3Crect x='115' cy='115' width='28' height='24' rx='3'/%3E%3Cpath d='M143,120 C149,120 149,132 143,132'/%3E%3Cpath d='M110,140 L148,140'/%3E%3Cpath d='M124,124 Q129,128 134,124 Q129,132 124,124 Z' fill='%238B5E3C' opacity='0.08'/%3E%3C!-- French Press / Dripper --%3E%3Crect x='75' y='45' width='20' height='30' rx='2'/%3E%3Cpath d='M85,38 L85,45' stroke-width='1.5'/%3E%3Ccircle cx='85' cy='36' r='2'/%3E%3Cpath d='M95,50 C101,50 101,65 95,65'/%3E%3C!-- Sparkles / Stars --%3E%3Cpath d='M85,100 L87,105 L92,107 L87,109 L85,114 L83,109 L78,107 L83,105 Z' fill='%238B5E3C' opacity='0.08'/%3E%3Cpath d='M160,85 L161,88 L164,89 L161,90 L160,93 L159,90 L156,89 L159,88 Z' fill='%238B5E3C' opacity='0.08'/%3E%3C/g%3E%3C/svg%3E")`,
-    backgroundColor: isNativeStore ? "#F7FAFC" : "#FAF7F2",
+    backgroundColor: isNativeStore ? "#F5F8FC" : "#FAF7F2",
   };
 
   const getCategoryTitle = (cat: string) => {
     switch (cat) {
       case "COFFEE_BEANS": return "☕ Coffee Beans";
       case "PACKAGING": return "🥤 Packaging & Cups";
-      case "INGREDIENTS": return "🥛 Milks & Ingredients";
-      case "SYRUPS": return "🍯 Syrups & Sauces";
+      case "INGREDIENTS": return "🥛 Milks & Syrups";
+      case "SYRUPS": return "🍯 Sauces & Powders";
       default: return `📦 ${cat.replace(/_/g, " ")}`;
     }
   };
 
   // -------------------------------------------------------------
-  // LOGIN SCREEN (When Barista / Admin is not logged in)
+  // LOGIN SCREEN
   // -------------------------------------------------------------
   if (!userEmail) {
     return (
       <div 
-        className="min-h-screen flex flex-col justify-between py-10 px-4"
+        className="min-h-screen flex flex-col justify-between py-12 px-4"
         style={cafeWallpaperStyle}
       >
-        {/* Top Noon App Brand Header */}
-        <div className="max-w-md mx-auto w-full text-center space-y-4">
-          <div className="flex items-center justify-center space-x-2">
-            <span className="bg-white border border-gray-200 px-3 py-1 rounded-full text-sm font-black tracking-tight shadow-sm text-gray-900">
-              noon
-            </span>
-            <span className="bg-[#FFF000] text-red-600 font-extrabold px-3 py-1 rounded-full text-xs tracking-wider shadow-sm border border-yellow-400">
-              MINUTES CAFE
-            </span>
-            <span className="bg-[#780D21] text-white font-bold px-3 py-1 rounded-full text-xs shadow-sm">
-              SHOT
-            </span>
-            <span className="bg-[#1E75C7] text-white font-bold px-3 py-1 rounded-full text-xs shadow-sm">
-              NATIVE
-            </span>
+        <div className="max-w-md mx-auto w-full text-center space-y-3">
+          <div className="inline-flex items-center space-x-2 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-stone-200 shadow-sm">
+            <span className="font-black text-xs tracking-tight text-stone-900">noon CAFE OPS</span>
+            <span className="text-stone-300">•</span>
+            <span className="bg-[#1E74C6] text-white text-[10px] font-black px-2 py-0.5 rounded-full">NATIVE × SUBKO</span>
+            <span className="bg-[#700D22] text-white text-[10px] font-black px-2 py-0.5 rounded-full">SHOT</span>
           </div>
         </div>
 
-        {/* Login Box */}
         <div className="max-w-md mx-auto w-full bg-white/95 backdrop-blur-md p-8 rounded-3xl shadow-xl border border-stone-200 space-y-6">
           <div className="text-center space-y-2">
             <div className="w-16 h-16 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center border border-amber-200 shadow-inner">
               <span className="text-3xl">☕</span>
             </div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-              Barista Cafe Portal
+            <h1 className="text-2xl font-black text-stone-900 tracking-tight">
+              Barista Ordering Portal
             </h1>
             <p className="text-xs text-stone-500 font-medium">
-              Official store replenishment system for SHOT & NATIVE cafes.
+              Official stock replenishment & recipe compliance system for SHOT & NATIVE stores.
             </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">
-                Store Email Address
+                Cafe Store Email ID
               </label>
               <div className="relative">
                 <input
@@ -258,14 +249,14 @@ export default function BaristaPortal() {
                   required
                   value={loginInput}
                   onChange={(e) => setLoginInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50/50 focus:bg-white focus:ring-2 focus:ring-[#780D21] focus:border-[#780D21] focus:outline-none transition"
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50/50 focus:bg-white focus:ring-2 focus:ring-[#1E74C6] focus:border-[#1E74C6] focus:outline-none transition"
                 />
                 <span className="absolute left-3.5 top-3.5 text-stone-400 text-sm">
                   ✉️
                 </span>
               </div>
               <p className="text-[11px] text-stone-400 mt-1">
-                Enter your designated cafe store email or authorized admin email.
+                Enter your designated store email (e.g. cafe-Downtown@noon.com) or admin account.
               </p>
             </div>
 
@@ -278,7 +269,7 @@ export default function BaristaPortal() {
 
             <button
               type="submit"
-              className="w-full bg-[#1F1F1F] hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm tracking-wide shadow-lg hover:shadow-xl transition duration-150 flex items-center justify-center space-x-2"
+              className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm tracking-wide shadow-lg hover:shadow-xl transition duration-150 flex items-center justify-center space-x-2"
             >
               <span>Sign In to Store Portal</span>
               <span>→</span>
@@ -288,89 +279,94 @@ export default function BaristaPortal() {
           <div className="pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
             <span className="flex items-center space-x-1">
               <span>🔒</span>
-              <span>Authorized Access</span>
+              <span>Store Replenishment System</span>
             </span>
             <a 
               href="/admin" 
-              className="font-bold text-stone-800 hover:text-[#780D21] transition"
+              className="font-bold text-stone-800 hover:text-[#1E74C6] transition"
             >
-              Admin Sign In ⚙️
+              Admin Dashboard ⚙️
             </a>
           </div>
         </div>
 
-        {/* Footer Note */}
         <div className="max-w-md mx-auto w-full text-center text-xs text-stone-400">
-          Powered by noon Minutes • Specialty Coffee Supply Chain
+          noon Specialty Coffee Operations • Dubai & UAE Cafes
         </div>
       </div>
     );
   }
 
   // -------------------------------------------------------------
-  // MAIN BARISTA STORE PORTAL (OFFICIAL NOON APP UI)
+  // MAIN BARISTA STORE PORTAL
   // -------------------------------------------------------------
   return (
     <div 
       className="min-h-screen pb-32 transition-colors duration-300"
       style={cafeWallpaperStyle}
     >
-      {/* 1. TOP OFFICIAL NOON SUPERAPP STATUS & BAR */}
+      {/* 1. TOP BRANDED BARISTA OPS HEADER */}
       <header className={`sticky top-0 z-30 transition-colors shadow-md ${
-        isNativeStore ? "bg-[#1E74C6] text-white" : "bg-[#700D22] text-white"
+        isNativeStore ? "bg-[#1864AB] text-white" : "bg-[#6B0B20] text-white"
       }`}>
-        <div className="max-w-3xl mx-auto px-4 pt-3 pb-3 space-y-3">
+        <div className="max-w-3xl mx-auto px-4 pt-3.5 pb-3.5 space-y-3">
           
-          {/* Top Superapp Navigation Pills */}
+          {/* Header Top Bar */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-0.5">
-              <span className="bg-white text-black font-black text-xs px-2.5 py-1 rounded-full shadow-sm">
-                noon
-              </span>
-              <span className="bg-white/90 text-[#103078] font-bold text-xs px-2.5 py-1 rounded-full shadow-sm">
-                supermall
-              </span>
-              <span className="bg-white/90 text-[#E60050] font-bold text-xs px-2.5 py-1 rounded-full shadow-sm">
-                FOOD
-              </span>
-              <span className="bg-[#FFF000] text-red-600 font-extrabold text-xs px-2.5 py-1 rounded-full shadow-sm flex items-center space-x-1">
-                <span>⚡</span>
-                <span>MINUTES</span>
-              </span>
+            <div className="flex items-center space-x-2">
+              {isNativeStore ? (
+                <div className="flex items-center space-x-2 bg-white/10 px-3 py-1 rounded-full border border-white/20">
+                  <span className="text-amber-200 text-xs font-black tracking-widest uppercase">
+                    SUBKO COLLAB
+                  </span>
+                  <span className="text-white font-black text-sm tracking-wide">
+                    NATIVE CAFE
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2 bg-white/10 px-3 py-1 rounded-full border border-white/20">
+                  <span className="text-[#FFF000] text-xs font-black tracking-widest uppercase">
+                    SHOT
+                  </span>
+                  <span className="text-white font-black text-sm tracking-wide">
+                    CAFE OPERATIONS
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Admin Switcher & Logout */}
+            {/* Quick Actions (Admin & Logout) */}
             <div className="flex items-center space-x-2">
               {isAdminMode && (
                 <a
                   href="/admin"
-                  className="bg-yellow-400 hover:bg-yellow-300 text-black font-extrabold text-xs px-2.5 py-1 rounded-lg transition shadow flex items-center space-x-1"
+                  className="bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-2.5 py-1.5 rounded-xl transition shadow flex items-center space-x-1"
                 >
                   <span>⚙️</span>
-                  <span className="hidden sm:inline">Admin</span>
+                  <span>Admin</span>
                 </a>
               )}
               <button
                 onClick={handleLogout}
-                className="bg-black/20 hover:bg-black/40 text-white font-bold text-xs px-2.5 py-1 rounded-lg transition"
+                className="bg-white/15 hover:bg-white/25 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl transition"
               >
                 Logout
               </button>
             </div>
           </div>
 
-          {/* Delivery & Active Store Info */}
-          <div className="flex items-center justify-between text-xs pt-1 border-t border-white/10">
+          {/* Store Location & Brand Sub-Header */}
+          <div className="flex items-center justify-between text-xs pt-1 border-t border-white/15">
             <div className="flex items-center space-x-2 truncate">
-              <span className="bg-white/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider text-[10px]">
+              <span className="bg-white/20 px-2 py-0.5 rounded-md font-black text-[10px] tracking-wider uppercase">
                 {isNativeStore ? "NATIVE STORE" : "SHOT STORE"}
               </span>
               <span className="font-extrabold text-sm truncate">
-                📍 {selectedStore?.ds_name || "Select Store"} ({selectedStore?.ds_code})
+                📍 {selectedStore?.ds_name || "Store"} ({selectedStore?.ds_code})
               </span>
             </div>
 
-            {/* Quick Switch for Admins */}
+            {/* Switch Store for Admins */}
             {isAdminMode && stores.length > 0 && (
               <select
                 value={selectedStore?.ds_code || ""}
@@ -381,7 +377,7 @@ export default function BaristaPortal() {
                     setCart({});
                   }
                 }}
-                className="bg-white text-black font-bold text-xs rounded-lg px-2 py-1 outline-none shadow-sm"
+                className="bg-white text-stone-900 font-bold text-xs rounded-lg px-2 py-1 outline-none shadow-sm"
               >
                 {stores.map(s => (
                   <option key={s.ds_code} value={s.ds_code}>
@@ -392,16 +388,16 @@ export default function BaristaPortal() {
             )}
           </div>
 
-          {/* 2. NOON APP SEARCH BAR */}
-          <div className="relative pt-1">
+          {/* 2. FAST PRODUCT & SKU SEARCH BAR */}
+          <div className="relative pt-0.5">
             <input
               type="text"
-              placeholder={`Search "${isNativeStore ? 'subko, colombian decaf, oat milk...' : 'coffee beans, syrups, cups...'}"`}
+              placeholder={`Search "${isNativeStore ? 'subko, colombian decaf, oat milk, cups...' : 'coffee beans, vanilla, oat milk, cups...'}"`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-gray-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none focus:ring-2 focus:ring-yellow-400"
+              className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-stone-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none focus:ring-2 focus:ring-yellow-400"
             />
-            <span className="absolute left-3.5 top-3.5 text-stone-400 text-sm">
+            <span className="absolute left-3.5 top-3 text-stone-400 text-sm">
               🔍
             </span>
             {searchQuery && (
@@ -417,327 +413,483 @@ export default function BaristaPortal() {
         </div>
       </header>
 
-      {/* 3. CATEGORY / BRAND HORIZONTAL TABS */}
-      <div className="sticky top-[128px] z-20 bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm">
-        <div className="max-w-3xl mx-auto px-4 py-2.5 flex items-center space-x-2 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setSelectedCategory("ALL")}
-            className={`px-3 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap ${
-              selectedCategory === "ALL"
-                ? (isNativeStore ? "bg-[#1E74C6] text-white" : "bg-[#700D22] text-white")
-                : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-            }`}
-          >
-            All Items ({brandFilteredItems.length})
-          </button>
-
-          {isNativeStore && (
+      {/* 3. TABS: ORDERING CATALOG vs BARISTA BRM & HYGIENE GUIDE */}
+      <div className="bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm sticky top-[138px] z-20">
+        <div className="max-w-3xl mx-auto px-4 flex items-center justify-between">
+          <div className="flex space-x-1 py-1.5 overflow-x-auto no-scrollbar">
             <button
-              onClick={() => setSelectedCategory("NATIVE_SPECIALTY")}
-              className={`px-3 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap border ${
-                selectedCategory === "NATIVE_SPECIALTY"
-                  ? "bg-[#8C1826] text-white border-[#8C1826]"
-                  : "bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100"
+              onClick={() => setActiveTab("CATALOG")}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === "CATALOG"
+                  ? (isNativeStore ? "bg-[#1864AB] text-white" : "bg-[#6B0B20] text-white")
+                  : "text-stone-600 hover:bg-stone-100"
               }`}
             >
-              ★ SUBKO Collab Beans
+              <span>📦</span>
+              <span>Stock Catalog ({brandFilteredItems.length})</span>
             </button>
-          )}
 
-          {categories.map(cat => (
             <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap ${
-                selectedCategory === cat
-                  ? (isNativeStore ? "bg-[#1E74C6] text-white" : "bg-[#700D22] text-white")
+              onClick={() => setActiveTab("BRM_GUIDE")}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition flex items-center space-x-1.5 whitespace-nowrap ${
+                activeTab === "BRM_GUIDE"
+                  ? (isNativeStore ? "bg-[#8C1826] text-white" : "bg-[#8C1826] text-white")
+                  : "text-stone-600 hover:bg-stone-100"
+              }`}
+            >
+              <span>📋</span>
+              <span>Barista BRMs & Hygiene Standards</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sub-categories row when in Catalog mode */}
+        {activeTab === "CATALOG" && (
+          <div className="max-w-3xl mx-auto px-4 pb-2.5 flex items-center space-x-1.5 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setSelectedCategory("ALL")}
+              className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap ${
+                selectedCategory === "ALL"
+                  ? "bg-stone-900 text-white"
                   : "bg-stone-100 hover:bg-stone-200 text-stone-700"
               }`}
             >
-              {getCategoryTitle(cat)}
+              All Items
             </button>
-          ))}
-        </div>
+
+            {isNativeStore && (
+              <button
+                onClick={() => setSelectedCategory("SUBKO_SPECIALTY")}
+                className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap border ${
+                  selectedCategory === "SUBKO_SPECIALTY"
+                    ? "bg-[#8C1826] text-white border-[#8C1826]"
+                    : "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                }`}
+              >
+                ★ Subko Specialty Beans
+              </button>
+            )}
+
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap ${
+                  selectedCategory === cat
+                    ? "bg-stone-900 text-white"
+                    : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+                }`}
+              >
+                {getCategoryTitle(cat)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <main className="max-w-3xl mx-auto px-4 pt-4 space-y-6">
+      <main className="max-w-3xl mx-auto px-4 pt-4 space-y-5">
 
-        {/* 4. BRAND PROMOTIONAL & VALUES BANNER (EXACT TO SCREENSHOTS) */}
+        {/* 4. BARISTA EXCELLENCE BANNERS (FOCUSED ON BRMs, FRESH MAKING & HYGIENE) */}
         {isNativeStore ? (
-          /* NATIVE BRAND BANNER (Screenshots 1-4) */
-          <div className="rounded-3xl overflow-hidden shadow-md border border-sky-200 bg-[#FFF7E8]">
-            {/* Top Subko Collaboration Header */}
-            <div className="bg-[#1E74C6] text-white px-5 py-3 flex items-center justify-between">
+          /* NATIVE × SUBKO BARISTA OPERATIONAL BANNER */
+          <div className="rounded-3xl overflow-hidden shadow-lg border border-sky-200 bg-gradient-to-b from-[#FFF9EE] to-[#FFF3DC]">
+            {/* Header Tag */}
+            <div className="bg-[#1864AB] text-white px-5 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <span className="bg-[#FFF6DE] text-[#8C1826] text-[10px] font-black px-2 py-0.5 rounded tracking-widest uppercase">
-                  POWERED BY SUBKO
+                <span className="bg-[#FFF3DC] text-[#8C1826] text-[10px] font-black px-2.5 py-0.5 rounded tracking-widest uppercase">
+                  NATIVE × SUBKO
                 </span>
                 <span className="font-extrabold text-sm tracking-wide">
-                  NATIVE • cafe by noon
+                  Barista Craft & Quality Standards
                 </span>
               </div>
-              <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-bold">
-                Single Origin
+              <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-bold">
+                Specialty Coffee
               </span>
             </div>
 
-            {/* Banner Main Graphic */}
-            <div className="p-6 text-center space-y-4">
-              <div className="inline-block bg-[#8C1826] text-[#FFF6DE] px-4 py-1.5 rounded-full font-black text-xs tracking-widest uppercase shadow">
-                SINGLE ORIGIN COFFEE
+            {/* Core Operational Guidelines */}
+            <div className="p-5 space-y-4">
+              <div className="text-center space-y-1">
+                <h2 className="text-xl sm:text-2xl font-black text-[#8C1826] tracking-tight uppercase">
+                  MADE BY HAND, SERVED WITH HEART
+                </h2>
+                <p className="text-xs font-semibold text-stone-700 max-w-lg mx-auto">
+                  Every Native cup represents our craft collaboration with Subko. Baristas must maintain precise dial-in parameters, spotless hygiene, and fresh preparation for every ticket.
+                </p>
               </div>
-              <h2 className="text-2xl sm:text-3xl font-black text-[#8C1826] tracking-tight uppercase">
-                MADE BY HAND, SERVED WITH HEART
-              </h2>
-              <p className="text-xs sm:text-sm font-bold text-amber-950 max-w-md mx-auto">
-                Specialty Coffee. In Record Time. Handcrafted with exclusive single-origin roast profiles and boutique packaging.
-              </p>
 
-              {/* Native Preset Badges */}
-              <div className="grid grid-cols-3 gap-2 pt-2">
-                <div className="bg-[#1E74C6] text-white p-2.5 rounded-2xl shadow-sm text-center">
-                  <div className="text-[10px] uppercase font-bold text-sky-200">Roast Profile</div>
-                  <div className="text-xs sm:text-sm font-black mt-0.5">NATIVE MEDIUM</div>
+              {/* 4 Pillars for Baristas */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                <div className="bg-white/90 p-3 rounded-2xl border border-amber-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">⚖️</span>
+                  <div className="text-xs font-black text-[#8C1826]">Follow BRMs</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Strict dry dose (g), yield (g) & extraction timing.
+                  </p>
                 </div>
-                <div className="bg-[#8C1826] text-white p-2.5 rounded-2xl shadow-sm text-center">
-                  <div className="text-[10px] uppercase font-bold text-amber-200">Exclusive</div>
-                  <div className="text-xs sm:text-sm font-black mt-0.5">NICHE SPECIALTY</div>
+
+                <div className="bg-white/90 p-3 rounded-2xl border border-amber-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">🧼</span>
+                  <div className="text-xs font-black text-[#8C1826]">Station Hygiene</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Purge & wipe steam wands instantly; clean portafilters.
+                  </p>
                 </div>
-                <div className="bg-[#1E74C6] text-white p-2.5 rounded-2xl shadow-sm text-center">
-                  <div className="text-[10px] uppercase font-bold text-sky-200">Single Origin</div>
-                  <div className="text-xs sm:text-sm font-black mt-0.5">COLOMBIAN DECAF</div>
+
+                <div className="bg-white/90 p-3 rounded-2xl border border-amber-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">🥛</span>
+                  <div className="text-xs font-black text-[#8C1826]">Fresh Texturing</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Silky microfoam per order at 60–65°C. Zero re-steaming.
+                  </p>
+                </div>
+
+                <div className="bg-white/90 p-3 rounded-2xl border border-amber-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">⏱️</span>
+                  <div className="text-xs font-black text-[#8C1826]">Record Time</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Flawless speed of service without cutting craft corners.
+                  </p>
+                </div>
+              </div>
+
+              {/* Native Subko Roast Profiles Pill Bar */}
+              <div className="bg-white/80 rounded-2xl p-3 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="font-bold text-[#8C1826] text-xs">Exclusive Profiles:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="bg-[#1864AB] text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px]">
+                    NATIVE MEDIUM
+                  </span>
+                  <span className="bg-[#8C1826] text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px]">
+                    NICHE SPECIALTY
+                  </span>
+                  <span className="bg-[#1864AB] text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px]">
+                    COLOMBIAN DECAF
+                  </span>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          /* SHOT BRAND BANNER (Screenshots 5-8) */
-          <div className="rounded-3xl overflow-hidden shadow-md border border-rose-100 bg-[#FFF5F6] p-6 space-y-4">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <div className="inline-block bg-[#700D22] text-[#FFF000] text-[10px] font-black px-2.5 py-0.5 rounded-full tracking-widest uppercase">
+          /* SHOT BARISTA OPERATIONAL BANNER */
+          <div className="rounded-3xl overflow-hidden shadow-lg border border-rose-100 bg-gradient-to-b from-[#FFF5F6] to-[#FFEBEF]">
+            <div className="bg-[#6B0B20] text-white px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="bg-[#FFF000] text-black text-[10px] font-black px-2.5 py-0.5 rounded tracking-widest uppercase">
                   SHOT PROMISE
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-black text-[#700D22] leading-tight">
-                  No shortcuts.<br />No mass-production.
+                </span>
+                <span className="font-extrabold text-sm tracking-wide">
+                  Barista Standards & Operations
+                </span>
+              </div>
+              <span className="text-[11px] bg-white/20 px-2.5 py-0.5 rounded-full font-bold">
+                Fresh & Clean
+              </span>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="text-center space-y-1">
+                <h2 className="text-xl sm:text-2xl font-black text-[#6B0B20] tracking-tight uppercase">
+                  No Shortcuts • No Pre-Batching
                 </h2>
-                <p className="text-xs sm:text-sm font-medium text-stone-700 max-w-sm">
-                  Just boutique-quality ingredients hand-poured by baristas for every single order.
+                <p className="text-xs font-semibold text-stone-700 max-w-lg mx-auto">
+                  Hand-poured by baristas for every single ticket. Follow BRM recipe measures, maintain spotless stations, and prepare beverages strictly on demand.
                 </p>
               </div>
 
-              {/* Hand-Pour Seal Icon */}
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-full border-2 border-[#700D22] p-2 flex flex-col items-center justify-center text-center shadow-md flex-shrink-0">
-                <span className="text-xl sm:text-2xl">☕</span>
-                <span className="text-[8px] font-black uppercase text-[#700D22] leading-none mt-0.5">
-                  HAND POURED
-                </span>
-              </div>
-            </div>
-
-            {/* 3 Value Pillars */}
-            <div className="grid grid-cols-3 gap-2 pt-3 border-t border-rose-200/60">
-              <div className="bg-white/80 p-2.5 rounded-2xl text-center space-y-1 shadow-sm">
-                <span className="text-lg">🧼</span>
-                <div className="text-[11px] font-black text-[#700D22] leading-tight">
-                  Clean & Controlled
+              {/* 4 Pillars for Baristas */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+                <div className="bg-white/90 p-3 rounded-2xl border border-rose-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">📖</span>
+                  <div className="text-xs font-black text-[#6B0B20]">Strict BRMs</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Accurate syrup pumps, shot volume & beverage ratio.
+                  </p>
                 </div>
-                <div className="text-[9px] text-stone-500">Preparation</div>
-              </div>
 
-              <div className="bg-white/80 p-2.5 rounded-2xl text-center space-y-1 shadow-sm">
-                <span className="text-lg">☕</span>
-                <div className="text-[11px] font-black text-[#700D22] leading-tight">
-                  Made Fresh
+                <div className="bg-white/90 p-3 rounded-2xl border border-rose-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">🧼</span>
+                  <div className="text-xs font-black text-[#6B0B20]">Clean Station</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Sanitized cloths, clean tamper base & sanitized counter.
+                  </p>
                 </div>
-                <div className="text-[9px] text-stone-500">Only After Order</div>
-              </div>
 
-              <div className="bg-white/80 p-2.5 rounded-2xl text-center space-y-1 shadow-sm">
-                <span className="text-lg">🍋</span>
-                <div className="text-[11px] font-black text-[#700D22] leading-tight">
-                  High Quality
+                <div className="bg-white/90 p-3 rounded-2xl border border-rose-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">☕</span>
+                  <div className="text-xs font-black text-[#6B0B20]">Fresh Pulls</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Never serve expired shots. Pull fresh on ticket arrival.
+                  </p>
                 </div>
-                <div className="text-[9px] text-stone-500">Ingredients</div>
+
+                <div className="bg-white/90 p-3 rounded-2xl border border-rose-200/80 shadow-sm text-center space-y-1">
+                  <span className="text-xl">📦</span>
+                  <div className="text-xs font-black text-[#6B0B20]">Spill-Proof</div>
+                  <p className="text-[10px] text-stone-600 leading-tight">
+                    Secure cup lids tightly for rapid 15-minute dispatch.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* 5. ITEM CARDS GRID (INSPIRED BY NOON APP CARDS) */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-black text-stone-900 tracking-tight flex items-center space-x-2">
-              <span>{selectedCategory === "ALL" ? "All Supplies & SKUs" : getCategoryTitle(selectedCategory)}</span>
-              <span className="text-xs bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-bold">
-                {displayItems.length}
-              </span>
-            </h3>
-            <span className="text-xs font-semibold text-stone-500">
-              Zero MOQ (Min limit: 0)
-            </span>
-          </div>
-
-          {displayItems.length === 0 ? (
-            <div className="bg-white rounded-3xl p-12 text-center border border-stone-200 space-y-3">
-              <span className="text-4xl">🔍</span>
-              <h4 className="font-black text-stone-800 text-base">No items found</h4>
-              <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                No matching catalog items found for "{searchQuery}". Try searching for another brand or SKU.
+        {/* 5. CONTENT: BRM GUIDE TAB VIEW */}
+        {activeTab === "BRM_GUIDE" && (
+          <div className="bg-white rounded-3xl p-6 shadow-md border border-stone-200 space-y-6">
+            <div className="border-b pb-4">
+              <h3 className="text-lg font-black text-stone-900 flex items-center space-x-2">
+                <span>📋</span>
+                <span>Barista Recipe Manual (BRM) & Daily Shift Checklist</span>
+              </h3>
+              <p className="text-xs text-stone-500 mt-1">
+                Mandatory operational benchmarks for {selectedStore?.ds_name} ({selectedStore?.store_type} Store).
               </p>
+            </div>
+
+            {/* Dial-in Parameters */}
+            <div className="space-y-3">
+              <h4 className="font-extrabold text-sm text-stone-800 flex items-center space-x-2">
+                <span>☕</span>
+                <span>Espresso Dial-In Standards</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-1">
+                  <div className="font-bold text-stone-900">Dry Coffee Dose</div>
+                  <div className="text-stone-600 text-[11px]">18.0g – 18.5g per double shot basket. Level & tamp evenly.</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-1">
+                  <div className="font-bold text-stone-900">Liquid Espresso Yield</div>
+                  <div className="text-stone-600 text-[11px]">36.0g – 38.0g out in cup (1:2 ratio standard).</div>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 space-y-1">
+                  <div className="font-bold text-stone-900">Extraction Time</div>
+                  <div className="text-stone-600 text-[11px]">26 – 30 seconds. Discard shots out of this calibration range.</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Hygiene & Food Safety */}
+            <div className="space-y-3">
+              <h4 className="font-extrabold text-sm text-stone-800 flex items-center space-x-2">
+                <span>🧼</span>
+                <span>Hygiene & Food Safety Protocols</span>
+              </h4>
+              <ul className="space-y-2 text-xs text-stone-700">
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  <span><strong>Steam Wand Hygiene:</strong> Wipe with a dedicated damp sanitizing cloth and purge before AND immediately after texturing milk. Never let milk residue dry.</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  <span><strong>Milk Temperatures:</strong> Whole milk and dairy alternatives steamed strictly to 60°C–65°C. Never reheat or top up leftover steamed milk.</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  <span><strong>Portafilter Maintenance:</strong> Knock out coffee pucks immediately, wipe basket dry with clean microfibre before each dose, and keep portafilters locked in group head to maintain heat.</span>
+                </li>
+                <li className="flex items-start space-x-2">
+                  <span className="text-emerald-600 font-bold">✓</span>
+                  <span><strong>Stock Rotation (FIFO):</strong> Always consume older batch items first when receiving new cartons from replenishment. Check expiry labels daily.</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="pt-2 text-center">
               <button
-                onClick={() => { setSearchQuery(""); setSelectedCategory("ALL"); }}
-                className="bg-stone-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-stone-800"
+                onClick={() => setActiveTab("CATALOG")}
+                className={`px-6 py-2.5 rounded-2xl font-black text-xs text-white shadow-md transition ${
+                  isNativeStore ? "bg-[#1864AB] hover:bg-[#13508A]" : "bg-[#6B0B20] hover:bg-[#520818]"
+                }`}
               >
-                Reset Filters
+                ← Return to Stock Ordering Catalog
               </button>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {displayItems.map((item) => {
-                const currentQty = cart[item.item_zsku] || 0;
-                return (
-                  <div
-                    key={item.item_zsku}
-                    className="bg-white rounded-3xl p-4 shadow-sm hover:shadow-md border border-stone-200/80 transition-all flex flex-col justify-between space-y-3"
-                  >
-                    {/* Card Top: Badges & Brand */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap gap-1">
-                        {item.brand && (
-                          <span className="bg-stone-100 text-stone-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
-                            {item.brand.replace(/_/g, " ")}
+          </div>
+        )}
+
+        {/* 6. CONTENT: STOCK ORDERING CATALOG */}
+        {activeTab === "CATALOG" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-black text-stone-900 tracking-tight flex items-center space-x-2">
+                <span>{selectedCategory === "ALL" ? "Available Store Supplies" : getCategoryTitle(selectedCategory)}</span>
+                <span className="text-xs bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-bold">
+                  {displayItems.length}
+                </span>
+              </h3>
+              <span className="text-xs font-semibold text-stone-500">
+                Zero MOQ (Min limit: 0)
+              </span>
+            </div>
+
+            {displayItems.length === 0 ? (
+              <div className="bg-white rounded-3xl p-12 text-center border border-stone-200 space-y-3">
+                <span className="text-4xl">🔍</span>
+                <h4 className="font-black text-stone-800 text-base">No items found</h4>
+                <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                  No matching stock items for "{searchQuery}". Try searching for another brand or SKU.
+                </p>
+                <button
+                  onClick={() => { setSearchQuery(""); setSelectedCategory("ALL"); }}
+                  className="bg-stone-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-stone-800"
+                >
+                  Reset Filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {displayItems.map((item) => {
+                  const currentQty = cart[item.item_zsku] || 0;
+                  return (
+                    <div
+                      key={item.item_zsku}
+                      className="bg-white rounded-3xl p-4 shadow-sm hover:shadow-md border border-stone-200/80 transition-all flex flex-col justify-between space-y-3"
+                    >
+                      {/* Card Top: Badges */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-wrap gap-1">
+                          {item.brand && (
+                            <span className="bg-stone-100 text-stone-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
+                              {item.brand.replace(/_/g, " ")}
+                            </span>
+                          )}
+                          {item.unit_size && item.unit_type && (
+                            <span className="bg-amber-50 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200/50">
+                              {item.unit_size} {item.unit_type}
+                            </span>
+                          )}
+                          {item.max_qty && (
+                            <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              Max: {item.max_qty}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Stock Status */}
+                        {!item.in_stock ? (
+                          <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md">
+                            OOS
                           </span>
-                        )}
-                        {item.unit_size && item.unit_type && (
-                          <span className="bg-amber-50 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200/50">
-                            {item.unit_size} {item.unit_type}
-                          </span>
-                        )}
-                        {item.max_qty && (
-                          <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            Max: {item.max_qty}
+                        ) : (
+                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            In Stock
                           </span>
                         )}
                       </div>
 
-                      {/* Stock Status Pill */}
-                      {!item.in_stock ? (
-                        <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md">
-                          OOS
-                        </span>
-                      ) : (
-                        <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          In Stock
-                        </span>
-                      )}
-                    </div>
+                      {/* Card Middle: Image & Info */}
+                      <div className="flex items-center space-x-3">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.product_title}
+                            className="w-16 h-16 object-contain rounded-2xl bg-stone-50 border p-1 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-inner border ${
+                            isNativeStore
+                              ? "bg-gradient-to-br from-sky-50 to-blue-100 border-sky-200 text-sky-800"
+                              : "bg-gradient-to-br from-amber-50 to-rose-50 border-rose-200 text-[#6B0B20]"
+                          }`}>
+                            {item.category === "COFFEE_BEANS" ? "☕" : item.category === "PACKAGING" ? "🥤" : "🥛"}
+                          </div>
+                        )}
 
-                    {/* Card Middle: Thumbnail & Title */}
-                    <div className="flex items-center space-x-3">
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.product_title}
-                          className="w-16 h-16 object-contain rounded-2xl bg-stone-50 border p-1 flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-50 to-stone-100 border border-stone-200 flex items-center justify-center text-2xl flex-shrink-0 shadow-inner">
-                          {item.category === "COFFEE_BEANS" ? "☕" : item.category === "PACKAGING" ? "🥤" : "🥛"}
+                        <div className="space-y-0.5 flex-1 min-w-0">
+                          <h4 className="font-extrabold text-stone-900 text-sm leading-snug line-clamp-2">
+                            {item.product_title}
+                          </h4>
+                          <p className="text-[11px] font-mono text-stone-400 truncate">
+                            SKU: {item.item_zsku}
+                          </p>
+                          {item.barcode && (
+                            <p className="text-[10px] font-mono text-stone-400 truncate">
+                              Barcode: {item.barcode}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Out of Stock Substitute Notice */}
+                      {!item.in_stock && (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium p-2 rounded-xl">
+                          {item.substitute_zsku ? (
+                            <>⚠️ OOS: Auto-substitute with SKU <span className="font-mono font-bold">{item.substitute_zsku}</span></>
+                          ) : (
+                            <>⚠️ Currently Out of Stock</>
+                          )}
                         </div>
                       )}
 
-                      <div className="space-y-0.5 flex-1 min-w-0">
-                        <h4 className="font-extrabold text-stone-900 text-sm leading-snug line-clamp-2">
-                          {item.product_title}
-                        </h4>
-                        <p className="text-[11px] font-mono text-stone-400 truncate">
-                          SKU: {item.item_zsku}
-                        </p>
-                        {item.barcode && (
-                          <p className="text-[10px] font-mono text-stone-400 truncate">
-                            Barcode: {item.barcode}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                      {/* Card Bottom: Stepper / Add button matching Noon App cards */}
+                      <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-stone-500">
+                          Order Qty:
+                        </span>
 
-                    {/* Out of Stock Substitute Notice */}
-                    {!item.in_stock && (
-                      <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium p-2 rounded-xl">
-                        {item.substitute_zsku ? (
-                          <>⚠️ OOS: Replaced with SKU <span className="font-mono font-bold">{item.substitute_zsku}</span></>
-                        ) : (
-                          <>⚠️ Currently Out of Stock</>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Card Bottom: Quantity Stepper (Noon App Style) */}
-                    <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-stone-500">
-                        Order Qty:
-                      </span>
-
-                      {currentQty === 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => updateCart(item.item_zsku, 1, item.max_qty)}
-                          className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition ${
-                            isNativeStore
-                              ? "bg-[#1E74C6] hover:bg-[#1860A3] text-white"
-                              : "bg-[#700D22] hover:bg-[#580B1C] text-white"
-                          }`}
-                        >
-                          + ADD
-                        </button>
-                      ) : (
-                        <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
+                        {currentQty === 0 ? (
                           <button
                             type="button"
-                            onClick={() => updateCart(item.item_zsku, currentQty - 1, item.max_qty)}
-                            className="w-7 h-7 rounded-full bg-white text-stone-800 font-black text-sm flex items-center justify-center shadow-sm hover:bg-stone-50 active:scale-95 transition"
-                          >
-                            –
-                          </button>
-                          
-                          <input
-                            type="number"
-                            min="0"
-                            max={item.max_qty || undefined}
-                            value={currentQty}
-                            onChange={(e) => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item.max_qty)}
-                            className="w-12 text-center font-black text-sm bg-transparent outline-none"
-                          />
-
-                          <button
-                            type="button"
-                            onClick={() => updateCart(item.item_zsku, currentQty + 1, item.max_qty)}
-                            className={`w-7 h-7 rounded-full text-white font-black text-sm flex items-center justify-center shadow-sm active:scale-95 transition ${
-                              isNativeStore ? "bg-[#1E74C6]" : "bg-[#700D22]"
+                            onClick={() => updateCart(item.item_zsku, 1, item.max_qty)}
+                            className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-lg shadow-sm border transition hover:scale-105 active:scale-95 ${
+                              isNativeStore
+                                ? "border-sky-500 text-[#1864AB] bg-sky-50 hover:bg-[#1864AB] hover:text-white"
+                                : "border-rose-500 text-[#6B0B20] bg-rose-50 hover:bg-[#6B0B20] hover:text-white"
                             }`}
                           >
                             +
                           </button>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-2xl border border-stone-200">
+                            <button
+                              type="button"
+                              onClick={() => updateCart(item.item_zsku, currentQty - 1, item.max_qty)}
+                              className="w-7 h-7 rounded-xl bg-white text-stone-800 font-black text-sm flex items-center justify-center shadow-sm hover:bg-stone-50 active:scale-95 transition"
+                            >
+                              –
+                            </button>
+                            
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.max_qty || undefined}
+                              value={currentQty}
+                              onChange={(e) => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item.max_qty)}
+                              className="w-12 text-center font-black text-sm bg-transparent outline-none"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={() => updateCart(item.item_zsku, currentQty + 1, item.max_qty)}
+                              className={`w-7 h-7 rounded-xl text-white font-black text-sm flex items-center justify-center shadow-sm active:scale-95 transition ${
+                                isNativeStore ? "bg-[#1864AB]" : "bg-[#6B0B20]"
+                              }`}
+                            >
+                              +
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
-      {/* 6. FLOATING BOTTOM ORDER CHECKOUT BAR (OFFICIAL NOON APP FLOATING CART) */}
+      {/* 7. FLOATING ORDER CHECKOUT BAR */}
       {totalItemsCount > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-stone-200 shadow-2xl">
           <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
             <div className="space-y-0.5">
               <div className="flex items-center space-x-2">
-                <span className="bg-[#FFF000] text-red-700 font-black text-[11px] px-2 py-0.5 rounded-md">
-                  {totalItemsCount} Units
+                <span className="bg-[#FFF000] text-black font-black text-[11px] px-2 py-0.5 rounded-md">
+                  {totalItemsCount} Total Units
                 </span>
                 <span className="text-xs font-bold text-stone-700">
                   ({totalUniqueItems} unique SKUs)
@@ -763,8 +915,8 @@ export default function BaristaPortal() {
                 disabled={isSubmitting}
                 className={`px-6 py-3 rounded-2xl font-black text-sm shadow-lg hover:shadow-xl active:scale-95 transition duration-150 disabled:opacity-50 flex items-center space-x-2 ${
                   isNativeStore
-                    ? "bg-[#1E74C6] hover:bg-[#1860A3] text-white"
-                    : "bg-[#700D22] hover:bg-[#580B1C] text-white"
+                    ? "bg-[#1864AB] hover:bg-[#13508A] text-white"
+                    : "bg-[#6B0B20] hover:bg-[#520818] text-white"
                 }`}
               >
                 <span>{isSubmitting ? "Submitting..." : "Submit Order"}</span>
@@ -775,15 +927,15 @@ export default function BaristaPortal() {
         </div>
       )}
 
-      {/* 7. CART BREAKDOWN MODAL */}
+      {/* 8. ORDER SUMMARY MODAL */}
       {isOrderSummaryOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
-                <h3 className="text-lg font-black text-stone-900">Review Store Order</h3>
+                <h3 className="text-lg font-black text-stone-900">Review Store Replenishment Order</h3>
                 <p className="text-xs text-stone-500">
-                  {selectedStore?.ds_name} ({selectedStore?.ds_code})
+                  {selectedStore?.ds_name} ({selectedStore?.ds_code}) • {selectedStore?.store_type} Store
                 </p>
               </div>
               <button
@@ -794,7 +946,6 @@ export default function BaristaPortal() {
               </button>
             </div>
 
-            {/* Cart Items List */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
               {Object.entries(cart)
                 .filter(([_, qty]) => qty > 0)
@@ -832,7 +983,6 @@ export default function BaristaPortal() {
                 })}
             </div>
 
-            {/* Modal Bottom CTA */}
             <div className="pt-3 border-t space-y-2">
               <button
                 type="button"
@@ -840,11 +990,11 @@ export default function BaristaPortal() {
                 disabled={isSubmitting}
                 className={`w-full py-3.5 rounded-2xl font-black text-sm shadow-md transition ${
                   isNativeStore
-                    ? "bg-[#1E74C6] text-white hover:bg-[#1860A3]"
-                    : "bg-[#700D22] text-white hover:bg-[#580B1C]"
+                    ? "bg-[#1864AB] text-white hover:bg-[#13508A]"
+                    : "bg-[#6B0B20] text-white hover:bg-[#520818]"
                 }`}
               >
-                {isSubmitting ? "Submitting Order..." : `Confirm & Submit (${totalItemsCount} Units)`}
+                {isSubmitting ? "Submitting Order..." : `Confirm & Place Order (${totalItemsCount} Units)`}
               </button>
             </div>
           </div>
