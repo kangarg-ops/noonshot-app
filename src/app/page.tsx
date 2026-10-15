@@ -13,7 +13,7 @@ export default function BaristaPortal() {
   const [loginError, setLoginError] = useState("");
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
+  const [selectedSection, setSelectedSection] = useState<string>("ALL");
   const [isOrderSummaryOpen, setIsOrderSummaryOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"CATALOG" | "BRM_GUIDE">("CATALOG");
 
@@ -159,51 +159,293 @@ export default function BaristaPortal() {
     });
   }, [items, selectedStore, isNativeStore]);
 
-  // Dynamic Categories
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    brandFilteredItems.forEach(i => {
-      if (i.category) set.add(i.category);
-    });
-    return Array.from(set);
-  }, [brandFilteredItems]);
+  // Search filtering
+  const searchedItems = useMemo(() => {
+    if (!searchQuery) return brandFilteredItems;
+    const q = searchQuery.toLowerCase();
+    return brandFilteredItems.filter(item =>
+      item.product_title?.toLowerCase().includes(q) ||
+      item.item_zsku?.toLowerCase().includes(q) ||
+      item.barcode?.toLowerCase().includes(q) ||
+      item.brand?.toLowerCase().includes(q)
+    );
+  }, [brandFilteredItems, searchQuery]);
 
-  // Apply Search & Category filters
-  const displayItems = useMemo(() => {
-    return brandFilteredItems.filter(item => {
-      const matchesSearch = 
-        !searchQuery ||
-        item.product_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.item_zsku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.barcode?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.brand?.toLowerCase().includes(searchQuery.toLowerCase());
+  // ----------------------------------------------------------------------
+  // CLASSIFICATION LOGIC FOR EXACT SECTIONS
+  // ----------------------------------------------------------------------
+  const categorizedSections = useMemo(() => {
+    const isMilk = (i: any) => {
+      const t = (i.product_title || "").toLowerCase();
+      return t.includes("milk") || t.includes("oat") || t.includes("almond") || t.includes("coconut cream");
+    };
 
-      const matchesCat = 
-        selectedCategory === "ALL" || 
-        item.category === selectedCategory ||
-        (selectedCategory === "SUBKO_SPECIALTY" && item.product_title?.toLowerCase().includes("subko"));
+    const isCoffeeBean = (i: any) => {
+      const t = (i.product_title || "").toLowerCase();
+      const cat = (i.category || "").toUpperCase();
+      return (
+        cat === "COFFEE_BEANS" ||
+        t.includes("blend") ||
+        t.includes("roast") ||
+        t.includes("coffee") ||
+        t.includes("decaf")
+      ) && !t.includes("cleaning") && !t.includes("cup");
+    };
 
-      return matchesSearch && matchesCat;
-    });
-  }, [brandFilteredItems, searchQuery, selectedCategory]);
+    const isDecaf = (i: any) => {
+      const t = (i.product_title || "").toLowerCase();
+      return t.includes("decaf");
+    };
+
+    const isUnbrandedPkg = (i: any) => {
+      const t = (i.product_title || "").toLowerCase();
+      const b = (i.barcode || "").toUpperCase();
+      return t.includes("unbranded") || b.startsWith("UBNAT");
+    };
+
+    const isNativeBrandedPkg = (i: any) => {
+      const t = (i.product_title || "").toLowerCase();
+      const b = (i.barcode || "").toUpperCase();
+      if (isUnbrandedPkg(i)) return false;
+      return (
+        i.item_type === "NATIVE_ONLY" ||
+        i.brand === "native" ||
+        b.startsWith("NAT") ||
+        t.includes("cup") ||
+        t.includes("lid") ||
+        t.includes("straw") ||
+        t.includes("foil") ||
+        t.includes("napkin") ||
+        t.includes("stirrers") ||
+        t.includes("branded")
+      );
+    };
+
+    if (isNativeStore) {
+      // NATIVE SECTIONS:
+      // 1. Coffee Beans (SUBKO specialty coffee) + Decaf subsection
+      // 2. Ingredients & Essentials (all other ingredients + ISI chargers)
+      // 3. NATIVE branded packaging
+      // 4. Unbranded packaging for native
+      const subkoBeans = searchedItems.filter(i => isCoffeeBean(i) && !isDecaf(i));
+      const decafBeans = searchedItems.filter(i => isCoffeeBean(i) && isDecaf(i));
+      const nativeBranded = searchedItems.filter(i => isNativeBrandedPkg(i));
+      const unbrandedPkg = searchedItems.filter(i => isUnbrandedPkg(i));
+
+      // Everything else is Ingredients & Essentials (including ISI chargers, milks, syrups, sauces, powders, cleaning)
+      const usedZskus = new Set([
+        ...subkoBeans.map(i => i.item_zsku),
+        ...decafBeans.map(i => i.item_zsku),
+        ...nativeBranded.map(i => i.item_zsku),
+        ...unbrandedPkg.map(i => i.item_zsku),
+      ]);
+      const ingredients = searchedItems.filter(i => !usedZskus.has(i.item_zsku));
+
+      return [
+        {
+          id: "NATIVE_COFFEE",
+          title: "☕ Coffee Beans (SUBKO Specialty Coffee)",
+          badge: "SUBKO Collab",
+          description: "Exclusive single-origin roasts crafted in collaboration with Subko.",
+          items: subkoBeans,
+          subsections: [
+            {
+              id: "NATIVE_DECAF",
+              title: "🌿 Decaf Beans (Specialty Decaf)",
+              description: "Decaffeinated single-origin beans maintaining full sensory profiles.",
+              items: decafBeans,
+            }
+          ]
+        },
+        {
+          id: "NATIVE_INGREDIENTS",
+          title: "🥛 Ingredients & Essentials (inc. ISI Chargers)",
+          badge: "Syrups, Milks & Charges",
+          description: "All syrups, sauces, frappe mixes, barista milks, powders, cleaning items, and ISI cream chargers.",
+          items: ingredients,
+          subsections: []
+        },
+        {
+          id: "NATIVE_BRANDED_PACKAGING",
+          title: "📦 NATIVE Branded Packaging",
+          badge: "Official Native",
+          description: "Native branded double-wall cups, lids, u-cups, straws, foils, bags, and branded sugars.",
+          items: nativeBranded,
+          subsections: []
+        },
+        {
+          id: "NATIVE_UNBRANDED_PACKAGING",
+          title: "📦 Unbranded Packaging for NATIVE (Backup)",
+          badge: "Backup Stock",
+          description: "Unbranded backup packaging to be ordered whenever NATIVE packaging is temporarily unavailable.",
+          items: unbrandedPkg,
+          subsections: []
+        }
+      ];
+    } else {
+      // SHOT SECTIONS:
+      // 1. Coffee Beans (All three)
+      // 2. Barista Milks
+      // 3. All Ingredients & Essentials (ISI charges will also come under same)
+      const beans = searchedItems.filter(i => isCoffeeBean(i));
+      const milks = searchedItems.filter(i => isMilkItem(i) && !isCoffeeBean(i));
+      
+      const usedZskus = new Set([
+        ...beans.map(i => i.item_zsku),
+        ...milks.map(i => i.item_zsku),
+      ]);
+      const ingredients = searchedItems.filter(i => !usedZskus.has(i.item_zsku));
+
+      return [
+        {
+          id: "SHOT_COFFEE",
+          title: "☕ Coffee Beans (All Three)",
+          badge: "3 Signature Roasts",
+          description: "Noon Minutes Blend (Shot signature), Ethiopian Medium Roast, and Decaf Colombia.",
+          items: beans,
+          subsections: []
+        },
+        {
+          id: "SHOT_MILKS",
+          title: "🥛 Barista Milks",
+          badge: "Dairy & Plant Milks",
+          description: "Barista grade Oat milk, Coconut milk, and Almond milk formulations for silky microfoam.",
+          items: milks,
+          subsections: []
+        },
+        {
+          id: "SHOT_INGREDIENTS",
+          title: "🍯 All Ingredients & Essentials (inc. ISI Chargers)",
+          badge: "Syrups & Chargers",
+          description: "All syrups, sauces, frappe powders, karak chai, matcha, cleaning supplies & ISI cream chargers.",
+          items: ingredients,
+          subsections: []
+        }
+      ];
+    }
+  }, [isNativeStore, searchedItems]);
 
   const totalItemsCount = Object.values(cart).reduce((a, b) => a + b, 0);
   const totalUniqueItems = Object.values(cart).filter(q => q > 0).length;
 
-  // Cafe wallpaper background pattern with coffee cups, portafilter, beans, latte art, steam
+  // Background cafe vector wallpaper (subtle cups, portafilters, beans, steam)
   const cafeWallpaperStyle = {
-    backgroundImage: `url("data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%238B5E3C' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' opacity='0.08'%3E%3C!-- Coffee Cup with Sleeve --%3E%3Cpath d='M25,25 L45,25 L41,60 L29,60 Z'/%3E%3Cpath d='M23,25 L47,25'/%3E%3Cpath d='M27,37 L43,37 L42,48 L28,48 Z'/%3E%3C!-- Steam --%3E%3Cpath d='M31,18 Q33,14 31,10'/%3E%3Cpath d='M39,18 Q41,14 39,10'/%3E%3C!-- Coffee Beans --%3E%3Cpath d='M120,35 C120,30 132,30 132,35 C132,40 120,40 120,35 Z'/%3E%3Cpath d='M123,32 Q126,35 129,38'/%3E%3Cpath d='M138,42 C138,37 150,37 150,42 C150,47 138,47 138,42 Z'/%3E%3Cpath d='M141,39 Q144,42 147,45'/%3E%3C!-- Portafilter Handle --%3E%3Ccircle cx='40' cy='135' r='12'/%3E%3Cpath d='M52,135 L80,135' stroke-width='2.2'/%3E%3Cpath d='M35,130 L45,130 L43,142 L37,142 Z'/%3E%3C!-- Ceramic Mug with Latte Art --%3E%3Crect x='115' cy='115' width='28' height='24' rx='3'/%3E%3Cpath d='M143,120 C149,120 149,132 143,132'/%3E%3Cpath d='M110,140 L148,140'/%3E%3Cpath d='M124,124 Q129,128 134,124 Q129,132 124,124 Z' fill='%238B5E3C' opacity='0.08'/%3E%3C!-- French Press / Dripper --%3E%3Crect x='75' y='45' width='20' height='30' rx='2'/%3E%3Cpath d='M85,38 L85,45' stroke-width='1.5'/%3E%3Ccircle cx='85' cy='36' r='2'/%3E%3Cpath d='M95,50 C101,50 101,65 95,65'/%3E%3C!-- Sparkles / Stars --%3E%3Cpath d='M85,100 L87,105 L92,107 L87,109 L85,114 L83,109 L78,107 L83,105 Z' fill='%238B5E3C' opacity='0.08'/%3E%3Cpath d='M160,85 L161,88 L164,89 L161,90 L160,93 L159,90 L156,89 L159,88 Z' fill='%238B5E3C' opacity='0.08'/%3E%3C/g%3E%3C/svg%3E")`,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%238B5E3C' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' opacity='0.07'%3E%3C!-- Coffee Cup with Sleeve --%3E%3Cpath d='M25,25 L45,25 L41,60 L29,60 Z'/%3E%3Cpath d='M23,25 L47,25'/%3E%3Cpath d='M27,37 L43,37 L42,48 L28,48 Z'/%3E%3C!-- Steam --%3E%3Cpath d='M31,18 Q33,14 31,10'/%3E%3Cpath d='M39,18 Q41,14 39,10'/%3E%3C!-- Coffee Beans --%3E%3Cpath d='M120,35 C120,30 132,30 132,35 C132,40 120,40 120,35 Z'/%3E%3Cpath d='M123,32 Q126,35 129,38'/%3E%3Cpath d='M138,42 C138,37 150,37 150,42 C150,47 138,47 138,42 Z'/%3E%3Cpath d='M141,39 Q144,42 147,45'/%3E%3C!-- Portafilter Handle --%3E%3Ccircle cx='40' cy='135' r='12'/%3E%3Cpath d='M52,135 L80,135' stroke-width='2.2'/%3E%3Cpath d='M35,130 L45,130 L43,142 L37,142 Z'/%3E%3C!-- Ceramic Mug with Latte Art --%3E%3Crect x='115' cy='115' width='28' height='24' rx='3'/%3E%3Cpath d='M143,120 C149,120 149,132 143,132'/%3E%3Cpath d='M110,140 L148,140'/%3E%3Cpath d='M124,124 Q129,128 134,124 Q129,132 124,124 Z' fill='%238B5E3C' opacity='0.07'/%3E%3C!-- French Press / Dripper --%3E%3Crect x='75' y='45' width='20' height='30' rx='2'/%3E%3Cpath d='M85,38 L85,45' stroke-width='1.5'/%3E%3Ccircle cx='85' cy='36' r='2'/%3E%3Cpath d='M95,50 C101,50 101,65 95,65'/%3E%3C!-- Sparkles / Stars --%3E%3Cpath d='M85,100 L87,105 L92,107 L87,109 L85,114 L83,109 L78,107 L83,105 Z' fill='%238B5E3C' opacity='0.07'/%3E%3C/g%3E%3C/svg%3E")`,
     backgroundColor: isNativeStore ? "#F5F8FC" : "#FAF7F2",
   };
 
-  const getCategoryTitle = (cat: string) => {
-    switch (cat) {
-      case "COFFEE_BEANS": return "☕ Coffee Beans";
-      case "PACKAGING": return "🥤 Packaging & Cups";
-      case "INGREDIENTS": return "🥛 Milks & Syrups";
-      case "SYRUPS": return "🍯 Sauces & Powders";
-      default: return `📦 ${cat.replace(/_/g, " ")}`;
-    }
+  // Reusable card component WITHOUT any images or placeholder glass icons
+  const renderItemCard = (item: any) => {
+    const currentQty = cart[item.item_zsku] || 0;
+    return (
+      <div
+        key={item.item_zsku}
+        className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-stone-200 transition-all flex flex-col justify-between space-y-3"
+      >
+        {/* Top Badges */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {item.brand && (
+              <span className="bg-stone-100 text-stone-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md border border-stone-200">
+                {item.brand.replace(/_/g, " ")}
+              </span>
+            )}
+            {item.unit_size && item.unit_type && (
+              <span className="bg-amber-50 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
+                {item.unit_size} {item.unit_type}
+              </span>
+            )}
+            {item.max_qty && (
+              <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-rose-200">
+                Max: {item.max_qty}
+              </span>
+            )}
+          </div>
+
+          {!item.in_stock ? (
+            <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md">
+              OOS
+            </span>
+          ) : (
+            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-emerald-200">
+              In Stock
+            </span>
+          )}
+        </div>
+
+        {/* Product Title & Identifiers */}
+        <div className="space-y-1">
+          <h4 className="font-extrabold text-stone-900 text-base leading-snug">
+            {item.product_title}
+          </h4>
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] font-mono text-stone-500">
+            <span>SKU: {item.item_zsku}</span>
+            {item.barcode && <span>• Barcode: {item.barcode}</span>}
+          </div>
+        </div>
+
+        {/* Substitute Notice */}
+        {!item.in_stock && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium p-2 rounded-xl">
+            {item.substitute_zsku ? (
+              <>⚠️ OOS: Replaced with SKU <span className="font-mono font-bold">{item.substitute_zsku}</span></>
+            ) : (
+              <>⚠️ Currently Out of Stock</>
+            )}
+          </div>
+        )}
+
+        {/* Bottom Stepper (Min 0) */}
+        <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
+          <span className="text-xs font-bold text-stone-500">
+            Order Qty:
+          </span>
+
+          {currentQty === 0 ? (
+            <button
+              type="button"
+              onClick={() => updateCart(item.item_zsku, 1, item.max_qty)}
+              className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition ${
+                isNativeStore
+                  ? "bg-[#1864AB] text-white hover:bg-[#13508A]"
+                  : "bg-[#6B0B20] text-white hover:bg-[#520818]"
+              }`}
+            >
+              + ADD
+            </button>
+          ) : (
+            <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
+              <button
+                type="button"
+                onClick={() => updateCart(item.item_zsku, currentQty - 1, item.max_qty)}
+                className="w-7 h-7 rounded-full bg-white text-stone-800 font-black text-sm flex items-center justify-center shadow-sm hover:bg-stone-50 active:scale-95 transition"
+              >
+                –
+              </button>
+              
+              <input
+                type="number"
+                min="0"
+                max={item.max_qty || undefined}
+                value={currentQty}
+                onChange={(e) => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item.max_qty)}
+                className="w-12 text-center font-black text-sm bg-transparent outline-none"
+              />
+
+              <button
+                type="button"
+                onClick={() => updateCart(item.item_zsku, currentQty + 1, item.max_qty)}
+                className={`w-7 h-7 rounded-full text-white font-black text-sm flex items-center justify-center shadow-sm active:scale-95 transition ${
+                  isNativeStore ? "bg-[#1864AB]" : "bg-[#6B0B20]"
+                }`}
+              >
+                +
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   // -------------------------------------------------------------
@@ -219,8 +461,8 @@ export default function BaristaPortal() {
           <div className="inline-flex items-center space-x-2 bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-stone-200 shadow-sm">
             <span className="font-black text-xs tracking-tight text-stone-900">noon CAFE OPS</span>
             <span className="text-stone-300">•</span>
-            <span className="bg-[#1E74C6] text-white text-[10px] font-black px-2 py-0.5 rounded-full">NATIVE × SUBKO</span>
-            <span className="bg-[#700D22] text-white text-[10px] font-black px-2 py-0.5 rounded-full">SHOT</span>
+            <span className="bg-[#1864AB] text-white text-[10px] font-black px-2 py-0.5 rounded-full">NATIVE × SUBKO</span>
+            <span className="bg-[#6B0B20] text-white text-[10px] font-black px-2 py-0.5 rounded-full">SHOT</span>
           </div>
         </div>
 
@@ -249,7 +491,7 @@ export default function BaristaPortal() {
                   required
                   value={loginInput}
                   onChange={(e) => setLoginInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50/50 focus:bg-white focus:ring-2 focus:ring-[#1E74C6] focus:border-[#1E74C6] focus:outline-none transition"
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50/50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:border-[#1864AB] focus:outline-none transition"
                 />
                 <span className="absolute left-3.5 top-3.5 text-stone-400 text-sm">
                   ✉️
@@ -283,7 +525,7 @@ export default function BaristaPortal() {
             </span>
             <a 
               href="/admin" 
-              className="font-bold text-stone-800 hover:text-[#1E74C6] transition"
+              className="font-bold text-stone-800 hover:text-[#1864AB] transition"
             >
               Admin Dashboard ⚙️
             </a>
@@ -392,7 +634,7 @@ export default function BaristaPortal() {
           <div className="relative pt-0.5">
             <input
               type="text"
-              placeholder={`Search "${isNativeStore ? 'subko, colombian decaf, oat milk, cups...' : 'coffee beans, vanilla, oat milk, cups...'}"`}
+              placeholder={`Search "${isNativeStore ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, vanilla, oat milk, cups, isi...'}"`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-stone-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none focus:ring-2 focus:ring-yellow-400"
@@ -413,7 +655,7 @@ export default function BaristaPortal() {
         </div>
       </header>
 
-      {/* 3. TABS: ORDERING CATALOG vs BARISTA BRM & HYGIENE GUIDE */}
+      {/* 3. TABS: ORDERING CATALOG vs BARISTA BRM GUIDE */}
       <div className="bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm sticky top-[138px] z-20">
         <div className="max-w-3xl mx-auto px-4 flex items-center justify-between">
           <div className="flex space-x-1 py-1.5 overflow-x-auto no-scrollbar">
@@ -433,7 +675,7 @@ export default function BaristaPortal() {
               onClick={() => setActiveTab("BRM_GUIDE")}
               className={`px-3.5 py-1.5 rounded-full text-xs font-black transition flex items-center space-x-1.5 whitespace-nowrap ${
                 activeTab === "BRM_GUIDE"
-                  ? (isNativeStore ? "bg-[#8C1826] text-white" : "bg-[#8C1826] text-white")
+                  ? "bg-[#8C1826] text-white"
                   : "text-stone-600 hover:bg-stone-100"
               }`}
             >
@@ -443,57 +685,43 @@ export default function BaristaPortal() {
           </div>
         </div>
 
-        {/* Sub-categories row when in Catalog mode */}
+        {/* 4. EXACT CUSTOM CATEGORY SECTIONS PILLS */}
         {activeTab === "CATALOG" && (
           <div className="max-w-3xl mx-auto px-4 pb-2.5 flex items-center space-x-1.5 overflow-x-auto no-scrollbar">
             <button
-              onClick={() => setSelectedCategory("ALL")}
+              onClick={() => setSelectedSection("ALL")}
               className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap ${
-                selectedCategory === "ALL"
+                selectedSection === "ALL"
                   ? "bg-stone-900 text-white"
                   : "bg-stone-100 hover:bg-stone-200 text-stone-700"
               }`}
             >
-              All Items
+              All Sections
             </button>
 
-            {isNativeStore && (
+            {categorizedSections.map(sec => (
               <button
-                onClick={() => setSelectedCategory("SUBKO_SPECIALTY")}
+                key={sec.id}
+                onClick={() => setSelectedSection(sec.id)}
                 className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap border ${
-                  selectedCategory === "SUBKO_SPECIALTY"
-                    ? "bg-[#8C1826] text-white border-[#8C1826]"
-                    : "bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100"
+                  selectedSection === sec.id
+                    ? (isNativeStore ? "bg-[#1864AB] text-white border-[#1864AB]" : "bg-[#6B0B20] text-white border-[#6B0B20]")
+                    : "bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100"
                 }`}
               >
-                ★ Subko Specialty Beans
-              </button>
-            )}
-
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap ${
-                  selectedCategory === cat
-                    ? "bg-stone-900 text-white"
-                    : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-                }`}
-              >
-                {getCategoryTitle(cat)}
+                {sec.title.split("(")[0].trim()}
               </button>
             ))}
           </div>
         )}
       </div>
 
-      <main className="max-w-3xl mx-auto px-4 pt-4 space-y-5">
+      <main className="max-w-3xl mx-auto px-4 pt-4 space-y-6">
 
-        {/* 4. BARISTA EXCELLENCE BANNERS (FOCUSED ON BRMs, FRESH MAKING & HYGIENE) */}
+        {/* 5. BARISTA OPERATIONAL BRM & HYGIENE BANNERS */}
         {isNativeStore ? (
           /* NATIVE × SUBKO BARISTA OPERATIONAL BANNER */
           <div className="rounded-3xl overflow-hidden shadow-lg border border-sky-200 bg-gradient-to-b from-[#FFF9EE] to-[#FFF3DC]">
-            {/* Header Tag */}
             <div className="bg-[#1864AB] text-white px-5 py-3 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <span className="bg-[#FFF3DC] text-[#8C1826] text-[10px] font-black px-2.5 py-0.5 rounded tracking-widest uppercase">
@@ -508,7 +736,6 @@ export default function BaristaPortal() {
               </span>
             </div>
 
-            {/* Core Operational Guidelines */}
             <div className="p-5 space-y-4">
               <div className="text-center space-y-1">
                 <h2 className="text-xl sm:text-2xl font-black text-[#8C1826] tracking-tight uppercase">
@@ -519,7 +746,6 @@ export default function BaristaPortal() {
                 </p>
               </div>
 
-              {/* 4 Pillars for Baristas */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                 <div className="bg-white/90 p-3 rounded-2xl border border-amber-200/80 shadow-sm text-center space-y-1">
                   <span className="text-xl">⚖️</span>
@@ -553,22 +779,6 @@ export default function BaristaPortal() {
                   </p>
                 </div>
               </div>
-
-              {/* Native Subko Roast Profiles Pill Bar */}
-              <div className="bg-white/80 rounded-2xl p-3 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="font-bold text-[#8C1826] text-xs">Exclusive Profiles:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="bg-[#1864AB] text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px]">
-                    NATIVE MEDIUM
-                  </span>
-                  <span className="bg-[#8C1826] text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px]">
-                    NICHE SPECIALTY
-                  </span>
-                  <span className="bg-[#1864AB] text-white font-extrabold px-2.5 py-1 rounded-lg text-[11px]">
-                    COLOMBIAN DECAF
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
         ) : (
@@ -598,7 +808,6 @@ export default function BaristaPortal() {
                 </p>
               </div>
 
-              {/* 4 Pillars for Baristas */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                 <div className="bg-white/90 p-3 rounded-2xl border border-rose-200/80 shadow-sm text-center space-y-1">
                   <span className="text-xl">📖</span>
@@ -636,20 +845,19 @@ export default function BaristaPortal() {
           </div>
         )}
 
-        {/* 5. CONTENT: BRM GUIDE TAB VIEW */}
+        {/* 6. BRM GUIDE TAB VIEW */}
         {activeTab === "BRM_GUIDE" && (
           <div className="bg-white rounded-3xl p-6 shadow-md border border-stone-200 space-y-6">
             <div className="border-b pb-4">
               <h3 className="text-lg font-black text-stone-900 flex items-center space-x-2">
                 <span>📋</span>
-                <span>Barista Recipe Manual (BRM) & Daily Shift Checklist</span>
+                <span>Barista Recipe Manual (BRM) & Daily Shift Standards</span>
               </h3>
               <p className="text-xs text-stone-500 mt-1">
                 Mandatory operational benchmarks for {selectedStore?.ds_name} ({selectedStore?.store_type} Store).
               </p>
             </div>
 
-            {/* Dial-in Parameters */}
             <div className="space-y-3">
               <h4 className="font-extrabold text-sm text-stone-800 flex items-center space-x-2">
                 <span>☕</span>
@@ -671,7 +879,6 @@ export default function BaristaPortal() {
               </div>
             </div>
 
-            {/* Hygiene & Food Safety */}
             <div className="space-y-3">
               <h4 className="font-extrabold text-sm text-stone-800 flex items-center space-x-2">
                 <span>🧼</span>
@@ -710,296 +917,26 @@ export default function BaristaPortal() {
           </div>
         )}
 
-        {/* 6. CONTENT: STOCK ORDERING CATALOG */}
+        {/* 7. EXACT CATEGORIZED SECTIONS DISPLAY */}
         {activeTab === "CATALOG" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-black text-stone-900 tracking-tight flex items-center space-x-2">
-                <span>{selectedCategory === "ALL" ? "Available Store Supplies" : getCategoryTitle(selectedCategory)}</span>
-                <span className="text-xs bg-stone-200 text-stone-700 px-2 py-0.5 rounded-full font-bold">
-                  {displayItems.length}
-                </span>
-              </h3>
-              <span className="text-xs font-semibold text-stone-500">
-                Zero MOQ (Min limit: 0)
-              </span>
-            </div>
+          <div className="space-y-8">
+            {categorizedSections
+              .filter(sec => selectedSection === "ALL" || selectedSection === sec.id)
+              .map(sec => {
+                const totalSecItems = sec.items.length + (sec.subsections?.reduce((a, s) => a + s.items.length, 0) || 0);
+                if (totalSecItems === 0 && searchQuery) return null;
 
-            {displayItems.length === 0 ? (
-              <div className="bg-white rounded-3xl p-12 text-center border border-stone-200 space-y-3">
-                <span className="text-4xl">🔍</span>
-                <h4 className="font-black text-stone-800 text-base">No items found</h4>
-                <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                  No matching stock items for "{searchQuery}". Try searching for another brand or SKU.
-                </p>
-                <button
-                  onClick={() => { setSearchQuery(""); setSelectedCategory("ALL"); }}
-                  className="bg-stone-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-stone-800"
-                >
-                  Reset Filters
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {displayItems.map((item) => {
-                  const currentQty = cart[item.item_zsku] || 0;
-                  return (
-                    <div
-                      key={item.item_zsku}
-                      className="bg-white rounded-3xl p-4 shadow-sm hover:shadow-md border border-stone-200/80 transition-all flex flex-col justify-between space-y-3"
-                    >
-                      {/* Card Top: Badges */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex flex-wrap gap-1">
-                          {item.brand && (
-                            <span className="bg-stone-100 text-stone-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
-                              {item.brand.replace(/_/g, " ")}
-                            </span>
-                          )}
-                          {item.unit_size && item.unit_type && (
-                            <span className="bg-amber-50 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200/50">
-                              {item.unit_size} {item.unit_type}
-                            </span>
-                          )}
-                          {item.max_qty && (
-                            <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                              Max: {item.max_qty}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Stock Status */}
-                        {!item.in_stock ? (
-                          <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md">
-                            OOS
+                return (
+                  <section key={sec.id} className="space-y-4">
+                    {/* Section Header */}
+                    <div className="border-b border-stone-200 pb-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-lg font-black text-stone-900 tracking-tight">
+                            {sec.title}
+                          </h3>
+                          <span className="bg-stone-200 text-stone-700 text-xs font-black px-2 py-0.5 rounded-full">
+                            {totalSecItems}
                           </span>
-                        ) : (
-                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            In Stock
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Card Middle: Image & Info */}
-                      <div className="flex items-center space-x-3">
-                        {item.imageUrl ? (
-                          <img
-                            src={item.imageUrl}
-                            alt={item.product_title}
-                            className="w-16 h-16 object-contain rounded-2xl bg-stone-50 border p-1 flex-shrink-0"
-                          />
-                        ) : (
-                          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 shadow-inner border ${
-                            isNativeStore
-                              ? "bg-gradient-to-br from-sky-50 to-blue-100 border-sky-200 text-sky-800"
-                              : "bg-gradient-to-br from-amber-50 to-rose-50 border-rose-200 text-[#6B0B20]"
-                          }`}>
-                            {item.category === "COFFEE_BEANS" ? "☕" : item.category === "PACKAGING" ? "🥤" : "🥛"}
-                          </div>
-                        )}
-
-                        <div className="space-y-0.5 flex-1 min-w-0">
-                          <h4 className="font-extrabold text-stone-900 text-sm leading-snug line-clamp-2">
-                            {item.product_title}
-                          </h4>
-                          <p className="text-[11px] font-mono text-stone-400 truncate">
-                            SKU: {item.item_zsku}
-                          </p>
-                          {item.barcode && (
-                            <p className="text-[10px] font-mono text-stone-400 truncate">
-                              Barcode: {item.barcode}
-                            </p>
-                          )}
                         </div>
-                      </div>
-
-                      {/* Out of Stock Substitute Notice */}
-                      {!item.in_stock && (
-                        <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium p-2 rounded-xl">
-                          {item.substitute_zsku ? (
-                            <>⚠️ OOS: Auto-substitute with SKU <span className="font-mono font-bold">{item.substitute_zsku}</span></>
-                          ) : (
-                            <>⚠️ Currently Out of Stock</>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Card Bottom: Stepper / Add button matching Noon App cards */}
-                      <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-stone-500">
-                          Order Qty:
-                        </span>
-
-                        {currentQty === 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => updateCart(item.item_zsku, 1, item.max_qty)}
-                            className={`w-9 h-9 rounded-2xl flex items-center justify-center font-black text-lg shadow-sm border transition hover:scale-105 active:scale-95 ${
-                              isNativeStore
-                                ? "border-sky-500 text-[#1864AB] bg-sky-50 hover:bg-[#1864AB] hover:text-white"
-                                : "border-rose-500 text-[#6B0B20] bg-rose-50 hover:bg-[#6B0B20] hover:text-white"
-                            }`}
-                          >
-                            +
-                          </button>
-                        ) : (
-                          <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-2xl border border-stone-200">
-                            <button
-                              type="button"
-                              onClick={() => updateCart(item.item_zsku, currentQty - 1, item.max_qty)}
-                              className="w-7 h-7 rounded-xl bg-white text-stone-800 font-black text-sm flex items-center justify-center shadow-sm hover:bg-stone-50 active:scale-95 transition"
-                            >
-                              –
-                            </button>
-                            
-                            <input
-                              type="number"
-                              min="0"
-                              max={item.max_qty || undefined}
-                              value={currentQty}
-                              onChange={(e) => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item.max_qty)}
-                              className="w-12 text-center font-black text-sm bg-transparent outline-none"
-                            />
-
-                            <button
-                              type="button"
-                              onClick={() => updateCart(item.item_zsku, currentQty + 1, item.max_qty)}
-                              className={`w-7 h-7 rounded-xl text-white font-black text-sm flex items-center justify-center shadow-sm active:scale-95 transition ${
-                                isNativeStore ? "bg-[#1864AB]" : "bg-[#6B0B20]"
-                              }`}
-                            >
-                              +
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </main>
-
-      {/* 7. FLOATING ORDER CHECKOUT BAR */}
-      {totalItemsCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-stone-200 shadow-2xl">
-          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center space-x-2">
-                <span className="bg-[#FFF000] text-black font-black text-[11px] px-2 py-0.5 rounded-md">
-                  {totalItemsCount} Total Units
-                </span>
-                <span className="text-xs font-bold text-stone-700">
-                  ({totalUniqueItems} unique SKUs)
-                </span>
-              </div>
-              <div className="text-xs font-black text-stone-900 truncate max-w-[200px] sm:max-w-sm">
-                Ordering for: {selectedStore?.ds_name}
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <button
-                type="button"
-                onClick={() => setIsOrderSummaryOpen(true)}
-                className="bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-black px-3.5 py-3 rounded-2xl transition"
-              >
-                View Cart
-              </button>
-
-              <button
-                type="button"
-                onClick={submitOrder}
-                disabled={isSubmitting}
-                className={`px-6 py-3 rounded-2xl font-black text-sm shadow-lg hover:shadow-xl active:scale-95 transition duration-150 disabled:opacity-50 flex items-center space-x-2 ${
-                  isNativeStore
-                    ? "bg-[#1864AB] hover:bg-[#13508A] text-white"
-                    : "bg-[#6B0B20] hover:bg-[#520818] text-white"
-                }`}
-              >
-                <span>{isSubmitting ? "Submitting..." : "Submit Order"}</span>
-                <span>→</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 8. ORDER SUMMARY MODAL */}
-      {isOrderSummaryOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h3 className="text-lg font-black text-stone-900">Review Store Replenishment Order</h3>
-                <p className="text-xs text-stone-500">
-                  {selectedStore?.ds_name} ({selectedStore?.ds_code}) • {selectedStore?.store_type} Store
-                </p>
-              </div>
-              <button
-                onClick={() => setIsOrderSummaryOpen(false)}
-                className="w-8 h-8 rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200 font-bold flex items-center justify-center"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {Object.entries(cart)
-                .filter(([_, qty]) => qty > 0)
-                .map(([zsku, qty]) => {
-                  const it = items.find(i => i.item_zsku === zsku);
-                  return (
-                    <div key={zsku} className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 border border-stone-100">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <div className="text-xs font-black text-stone-900 truncate">
-                          {it?.product_title || zsku}
-                        </div>
-                        <div className="text-[10px] text-stone-400 font-mono">
-                          SKU: {zsku} {it?.unit_size && `• ${it.unit_size} ${it.unit_type}`}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          min="0"
-                          max={it?.max_qty || undefined}
-                          value={qty}
-                          onChange={(e) => updateCart(zsku, parseInt(e.target.value) || 0, it?.max_qty)}
-                          className="w-14 text-center font-black text-xs border rounded-lg py-1 bg-white"
-                        />
-                        <button
-                          onClick={() => updateCart(zsku, 0, null)}
-                          className="text-stone-400 hover:text-red-600 text-xs font-bold px-1"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-
-            <div className="pt-3 border-t space-y-2">
-              <button
-                type="button"
-                onClick={submitOrder}
-                disabled={isSubmitting}
-                className={`w-full py-3.5 rounded-2xl font-black text-sm shadow-md transition ${
-                  isNativeStore
-                    ? "bg-[#1864AB] text-white hover:bg-[#13508A]"
-                    : "bg-[#6B0B20] text-white hover:bg-[#520818]"
-                }`}
-              >
-                {isSubmitting ? "Submitting Order..." : `Confirm & Place Order (${totalItemsCount} Units)`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                        <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
