@@ -1,6 +1,14 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 
+const SUPERVISORS: Record<string, string> = {
+  "ssantra@noon.com": "Instock Associate",
+  "rusamuel@noon.com": "Assistant Manager, SHOT",
+  "gbhamra@noon.com": "Senior Area Supervisor",
+  "sursingh@noon.com": "Area Supervisor",
+  "nadeekhan@noon.com": "Area Supervisor",
+};
+
 export default function BaristaPortal() {
   const [stores, setStores] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
@@ -12,6 +20,8 @@ export default function BaristaPortal() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  const [supervisorTitle, setSupervisorTitle] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState<string>("ALL");
   const [isOrderSummaryOpen, setIsOrderSummaryOpen] = useState(false);
@@ -36,23 +46,40 @@ export default function BaristaPortal() {
     return stores.find(s => matchStoreByEmail(s, loginInput)) || null;
   }, [loginInput, stores]);
 
+  const detectedSupervisor = useMemo(() => {
+    if (!loginInput) return null;
+    return SUPERVISORS[loginInput.trim().toLowerCase()] || null;
+  }, [loginInput]);
+
   useEffect(() => {
     if (!userEmail || stores.length === 0) return;
     const email = userEmail.trim().toLowerCase();
     const matched = stores.find(s => matchStoreByEmail(s, email));
     const isGlobal = (admins.includes(email) || email === "kangarg@noon.com") && !matched;
+    const supervisorRole = SUPERVISORS[email];
 
     if (matched) {
       setSelectedStore(matched);
       setIsAdminMode(false);
+      setIsSupervisor(false);
+      setSupervisorTitle("");
     } else if (isGlobal) {
       setIsAdminMode(true);
+      setIsSupervisor(false);
+      setSupervisorTitle("");
+      if (!selectedStore) setSelectedStore(stores[0]);
+    } else if (supervisorRole) {
+      setIsAdminMode(false);
+      setIsSupervisor(true);
+      setSupervisorTitle(supervisorRole);
       if (!selectedStore) setSelectedStore(stores[0]);
     } else {
       localStorage.removeItem("noon_user_email");
       setUserEmail("");
       setSelectedStore(null);
       setIsAdminMode(false);
+      setIsSupervisor(false);
+      setSupervisorTitle("");
       setLoginError("This email is not assigned to any cafe store. Please contact your manager.");
     }
   }, [userEmail, stores, admins]);
@@ -72,16 +99,28 @@ export default function BaristaPortal() {
 
     const matched = stores.find(s => matchStoreByEmail(s, email));
     const isGlobal = (admins.includes(email) || email === "kangarg@noon.com") && !matched;
+    const supervisorRole = SUPERVISORS[email];
 
     if (matched) {
       localStorage.setItem("noon_user_email", email);
       setUserEmail(email);
       setIsAdminMode(false);
+      setIsSupervisor(false);
+      setSupervisorTitle("");
       setSelectedStore(matched);
     } else if (isGlobal) {
       localStorage.setItem("noon_user_email", email);
       setUserEmail(email);
       setIsAdminMode(true);
+      setIsSupervisor(false);
+      setSupervisorTitle("");
+      setSelectedStore(stores[0]);
+    } else if (supervisorRole) {
+      localStorage.setItem("noon_user_email", email);
+      setUserEmail(email);
+      setIsAdminMode(false);
+      setIsSupervisor(true);
+      setSupervisorTitle(supervisorRole);
       setSelectedStore(stores[0]);
     } else {
       setLoginError(`Email "${email}" is not assigned to any cafe store. Please contact your manager.`);
@@ -94,6 +133,8 @@ export default function BaristaPortal() {
     setSelectedStore(null);
     setCart({});
     setIsAdminMode(false);
+    setIsSupervisor(false);
+    setSupervisorTitle("");
   };
 
   const isSubkoBean = (item: any) => {
@@ -435,6 +476,14 @@ export default function BaristaPortal() {
                   <div className="text-[11px] text-stone-600">Store Brand: <span className="font-bold">{detectedStore.store_type}</span> (Locked)</div>
                 </div>
               )}
+
+              {detectedSupervisor && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
+                  <div className="text-[10px] font-black uppercase text-amber-700">Verified Supervisor Access:</div>
+                  <div className="font-black text-stone-900 text-sm">{detectedSupervisor}</div>
+                  <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration & Testing Responses</span> (Non-Admin)</div>
+                </div>
+              )}
             </div>
 
             {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
@@ -484,10 +533,11 @@ export default function BaristaPortal() {
             <div className="flex items-center space-x-2 truncate">
               <span className="bg-white/20 px-2 py-0.5 rounded-md font-black text-[10px] uppercase">{isNative ? "NATIVE STORE" : "SHOT STORE"}</span>
               <span className="font-extrabold text-sm truncate">📍 {selectedStore?.ds_name} ({selectedStore?.ds_code})</span>
-              {!isAdminMode && <span className="bg-white/15 text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20">🔒 Locked</span>}
+              {!isAdminMode && !isSupervisor && <span className="bg-white/15 text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20">🔒 Locked</span>}
+              {isSupervisor && <span className="bg-amber-300 text-stone-900 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">👁️ {supervisorTitle} (Testing Mode)</span>}
             </div>
 
-            {isAdminMode && stores.length > 0 && (
+            {(isAdminMode || isSupervisor) && stores.length > 0 && (
               <select
                 value={selectedStore?.ds_code || ""}
                 onChange={(e) => {
