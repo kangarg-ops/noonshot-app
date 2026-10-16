@@ -24,18 +24,38 @@ export default function BaristaPortal() {
     fetch("/api/admins").then(r => r.json()).then(d => Array.isArray(d) && setAdmins(d.map((a: any) => a.email.toLowerCase())));
   }, []);
 
+  const matchStoreByEmail = (store: any, email: string) => {
+    if (!store || !store.email || !email) return false;
+    const cleanEmail = email.trim().toLowerCase();
+    const storeEmails = store.email.toLowerCase().split(/[,;\s]+/).map((e: string) => e.trim()).filter(Boolean);
+    return storeEmails.includes(cleanEmail);
+  };
+
+  const detectedStore = useMemo(() => {
+    if (!loginInput || stores.length === 0) return null;
+    return stores.find(s => matchStoreByEmail(s, loginInput)) || null;
+  }, [loginInput, stores]);
+
   useEffect(() => {
     if (!userEmail || stores.length === 0) return;
     const email = userEmail.trim().toLowerCase();
-    const isAdmin = admins.includes(email) || email === "kangarg@noon.com";
-    const matched = stores.find(s => s.email && s.email.trim().toLowerCase() === email);
+    const matched = stores.find(s => matchStoreByEmail(s, email));
+    const isGlobal = (admins.includes(email) || email === "kangarg@noon.com") && !matched;
 
     if (matched) {
+      // 🔒 STORE ACCOUNT: Strictly locked to their assigned store only!
       setSelectedStore(matched);
-      setIsAdminMode(isAdmin);
-    } else if (isAdmin) {
+      setIsAdminMode(false);
+    } else if (isGlobal) {
+      // HQ ADMIN: Can switch between all stores
       setIsAdminMode(true);
-      if (!selectedStore && stores.length > 0) setSelectedStore(stores[0]);
+      if (!selectedStore) setSelectedStore(stores[0]);
+    } else {
+      localStorage.removeItem("noon_user_email");
+      setUserEmail("");
+      setSelectedStore(null);
+      setIsAdminMode(false);
+      setLoginError("This email is not assigned to any cafe store. Please contact your manager.");
     }
   }, [userEmail, stores, admins]);
 
@@ -47,16 +67,28 @@ export default function BaristaPortal() {
       setLoginError("Please use your official @noon.com email address.");
       return;
     }
-    const matched = stores.find(s => s.email && s.email.trim().toLowerCase() === email);
-    const isAdmin = admins.includes(email) || email === "kangarg@noon.com";
+    if (stores.length === 0) {
+      setLoginError("Loading store data. Please try again in a few moments.");
+      return;
+    }
 
-    if (matched || isAdmin) {
+    const matched = stores.find(s => matchStoreByEmail(s, email));
+    const isGlobal = (admins.includes(email) || email === "kangarg@noon.com") && !matched;
+
+    if (matched) {
+      // 🔒 Strictly locked to their assigned store
       localStorage.setItem("noon_user_email", email);
       setUserEmail(email);
-      setIsAdminMode(isAdmin);
-      setSelectedStore(matched || stores[0]);
+      setIsAdminMode(false);
+      setSelectedStore(matched);
+    } else if (isGlobal) {
+      // HQ Admin
+      localStorage.setItem("noon_user_email", email);
+      setUserEmail(email);
+      setIsAdminMode(true);
+      setSelectedStore(stores[0]);
     } else {
-      setLoginError("Email not assigned to any cafe store. Please contact your manager.");
+      setLoginError(`Email "${email}" is not assigned to any cafe store. Please contact your manager.`);
     }
   };
 
@@ -79,6 +111,13 @@ export default function BaristaPortal() {
 
   const submitOrder = async () => {
     if (!selectedStore) return;
+
+    // Security: Ensure order is placed strictly for the user's assigned store
+    const email = userEmail.trim().toLowerCase();
+    const matched = stores.find(s => matchStoreByEmail(s, email));
+    const storeToOrder = matched || selectedStore;
+    if (!storeToOrder) return;
+
     setIsSubmitting(true);
     const orderItems = Object.entries(cart)
       .filter(([_, qty]) => qty > 0)
@@ -98,7 +137,7 @@ export default function BaristaPortal() {
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ds_code: selectedStore.ds_code, items: orderItems }),
+        body: JSON.stringify({ ds_code: storeToOrder.ds_code, items: orderItems }),
       });
       if (res.ok) {
         alert("🎉 Order submitted successfully!");
@@ -416,8 +455,23 @@ export default function BaristaPortal() {
                 <span className="absolute left-3.5 top-3.5 text-stone-400 text-sm">✉️</span>
               </div>
               <p className="text-[11px] text-stone-400 mt-1">
-                Enter your designated store email or admin account.
+                Each store email is strictly locked to its designated cafe location.
               </p>
+
+              {detectedStore && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-semibold flex items-center space-x-2.5 mt-2.5 shadow-sm">
+                  <span className="text-xl">🏬</span>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Verified Cafe Store:</div>
+                    <div className="font-black text-stone-900 text-sm">
+                      {detectedStore.ds_name} <span className="font-mono text-xs text-stone-500 font-normal">({detectedStore.ds_code})</span>
+                    </div>
+                    <div className="text-[11px] text-stone-600 font-medium">
+                      Store Brand: <span className="font-bold">{detectedStore.store_type}</span> (Locked Access)
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {loginError && (
@@ -506,33 +560,41 @@ export default function BaristaPortal() {
               <span className="font-extrabold text-sm truncate">
                 📍 {selectedStore?.ds_name || "Store"} ({selectedStore?.ds_code})
               </span>
+              {!isAdminMode && (
+                <span className="bg-white/15 text-white/90 text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20 whitespace-nowrap">
+                  🔒 Locked Store
+                </span>
+              )}
             </div>
 
             {isAdminMode && stores.length > 0 && (
-              <select
-                value={selectedStore?.ds_code || ""}
-                onChange={(e) => {
-                  const s = stores.find(st => st.ds_code === e.target.value);
-                  if (s) {
-                    setSelectedStore(s);
-                    setCart({});
-                  }
-                }}
-                className="bg-white text-stone-900 font-bold text-xs rounded-lg px-2 py-1 outline-none shadow-sm"
-              >
-                {stores.map(s => (
-                  <option key={s.ds_code} value={s.ds_code}>
-                    {s.ds_name} ({s.store_type})
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center space-x-1.5">
+                <span className="text-[10px] text-white/70 uppercase font-black hidden sm:inline">HQ Switcher:</span>
+                <select
+                  value={selectedStore?.ds_code || ""}
+                  onChange={(e) => {
+                    const s = stores.find(st => st.ds_code === e.target.value);
+                    if (s) {
+                      setSelectedStore(s);
+                      setCart({});
+                    }
+                  }}
+                  className="bg-white text-stone-900 font-bold text-xs rounded-lg px-2 py-1 outline-none shadow-sm"
+                >
+                  {stores.map(s => (
+                    <option key={s.ds_code} value={s.ds_code}>
+                      {s.ds_name} ({s.store_type})
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
 
           <div className="relative pt-0.5">
             <input
               type="text"
-              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, vanilla, oat milk, cups, essentials...'}"`}
+              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, vanilla, oat milk, cups, isi...'}"`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-stone-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none focus:ring-2 focus:ring-yellow-400"
