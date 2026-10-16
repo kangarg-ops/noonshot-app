@@ -221,34 +221,66 @@ export default function BaristaPortal() {
     const isBean = (i: any) => {
       const t = (i.product_title || "").toLowerCase();
       const cat = (i.category || "").toUpperCase();
-      return (cat === "COFFEE_BEANS" || t.includes("blend") || t.includes("roast") || t.includes("decaf")) && !t.includes("cleaning");
+      const b = (i.brand || "").toLowerCase();
+      if (t.includes("cleaning") || t.includes("clean") || t.includes("cup") || t.includes("lid") || t.includes("straw") || t.includes("syrup") || t.includes("sauce")) return false;
+      return (
+        cat === "COFFEE_BEANS" ||
+        isSubkoBean(i) ||
+        b.includes("subko") ||
+        t.includes("subko") ||
+        t.includes("blend") ||
+        t.includes("roast") ||
+        t.includes("decaf") ||
+        t.includes("coffee bean")
+      );
     };
 
     const isDecaf = (i: any) => (i.product_title || "").toLowerCase().includes("decaf");
 
     const isUnbranded = (i: any) => {
+      if (isBean(i) || isSubkoBean(i) || isMilk(i)) return false;
+      const cat = (i.category || "").toUpperCase();
+      if (cat === "COFFEE_BEANS" || cat === "INGREDIENTS" || cat === "MILK") return false;
       const t = (i.product_title || "").toLowerCase();
       const b = (i.barcode || "").toUpperCase();
       return t.includes("unbranded") || b.startsWith("UBNAT");
     };
 
     const isNativeBranded = (i: any) => {
+      if (isBean(i) || isSubkoBean(i)) return false;
+      if (isMilk(i)) return false;
       if (isUnbranded(i)) return false;
+
+      const cat = (i.category || "").toUpperCase();
+      if (cat === "COFFEE_BEANS" || cat === "INGREDIENTS" || cat === "MILK") return false;
+
       const t = (i.product_title || "").toLowerCase();
       const b = (i.barcode || "").toUpperCase();
-      return i.item_type === "NATIVE_ONLY" || i.brand === "native" || b.startsWith("NAT") ||
+
+      if (t.includes("bean") || t.includes("roast") || t.includes("subko") || t.includes("decaf") || t.includes("blend")) return false;
+
+      const isPkgTitle =
         t.includes("cup") || t.includes("lid") || t.includes("straw") || t.includes("foil") ||
-        t.includes("napkin") || t.includes("sugar") || t.includes("sweetener") || t.includes("stirrers") || t.includes("bag");
+        t.includes("napkin") || t.includes("sugar") || t.includes("sweetener") || t.includes("stirrers") ||
+        t.includes("sleeve") || t.includes("carrier") || t.includes("box") || (t.includes("bag") && !t.includes("coffee"));
+
+      return (
+        cat === "PACKAGING" ||
+        b.startsWith("NAT") ||
+        isPkgTitle ||
+        ((i.item_type === "NATIVE_ONLY" || i.brand === "native") && isPkgTitle)
+      );
     };
 
     if (isNative) {
       const subkoBeans = searchedItems.filter(i => isBean(i) && !isDecaf(i));
       const decafBeans = searchedItems.filter(i => isBean(i) && isDecaf(i));
-      const brandedPkg = searchedItems.filter(i => isNativeBranded(i));
-      const unbrandedPkg = searchedItems.filter(i => isUnbranded(i));
-
       const beansIds = new Set(subkoBeans.concat(decafBeans).map(i => i.item_zsku));
+
+      const brandedPkg = searchedItems.filter(i => !beansIds.has(i.item_zsku) && isNativeBranded(i));
+      const unbrandedPkg = searchedItems.filter(i => !beansIds.has(i.item_zsku) && isUnbranded(i));
       const pkgIds = new Set(brandedPkg.concat(unbrandedPkg).map(i => i.item_zsku));
+
       const milks = searchedItems.filter(i => !beansIds.has(i.item_zsku) && !pkgIds.has(i.item_zsku) && isMilk(i));
       const milksIds = new Set(milks.map(i => i.item_zsku));
 
