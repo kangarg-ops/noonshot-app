@@ -138,8 +138,8 @@ export default function AdminPortal() {
     }
   };
 
-  const downloadReport = () => {
-    window.open(`/api/report?date=${reportDate}`, "_blank");
+  const downloadReport = (format: string = 'xlsx') => {
+    window.open(`/api/report?date=${reportDate}&format=${format}`, "_blank");
   };
 
   const addStore = async (e: React.FormEvent) => {
@@ -554,8 +554,13 @@ export default function AdminPortal() {
               className="border p-2 rounded w-48"
             />
           </div>
-          <button onClick={downloadReport} className="bg-yellow-400 text-black px-6 py-2 rounded font-bold hover:bg-yellow-500">
-            Download Excel Report
+          <button onClick={() => downloadReport('xlsx')} className="bg-yellow-400 text-black px-5 py-2 rounded-lg font-bold hover:bg-yellow-500 text-sm flex items-center space-x-1.5 shadow-sm">
+            <span>📊</span>
+            <span>Download Excel (.xlsx)</span>
+          </button>
+          <button onClick={() => downloadReport('csv')} className="bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm flex items-center space-x-1.5 shadow-sm">
+            <span>📄</span>
+            <span>Download CSV (.csv)</span>
           </button>
         </div>
       </div>
