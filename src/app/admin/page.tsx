@@ -202,30 +202,30 @@ export default function AdminPortal() {
   };
 
   const removeStore = async (ds_code: string, ds_name: string) => {
-    if (!confirm(`Are you sure you want to remove store "${ds_name}" (${ds_code})?`)) return;
+    if (!confirm(`Are you sure you want to delete store ${ds_name} (${ds_code})?`)) return;
     try {
-      await fetch(`/api/stores?ds_code=${encodeURIComponent(ds_code)}`, {
-        method: "DELETE",
-      });
-      loadData();
+      const res = await fetch(`/api/stores?ds_code=${ds_code}`, { method: "DELETE" });
+      if (res.ok) {
+        loadData();
+      } else {
+        alert("Failed to delete store.");
+      }
     } catch (e) {
-      alert("Error removing store");
+      alert("Error deleting store.");
     }
   };
 
   const deleteAllStores = async () => {
-    if (!confirm("⚠️ CAUTION: Are you sure you want to DELETE ALL STORES from the portal? This cannot be undone.")) return;
-    if (!confirm("Please confirm a second time: This will remove every single store.")) return;
+    if (!confirm("⚠️ CAUTION: Are you sure you want to delete ALL stores? This cannot be undone.")) return;
     try {
       const res = await fetch("/api/stores?all=true", { method: "DELETE" });
       if (res.ok) {
-        alert("All stores have been deleted.");
         loadData();
       } else {
         alert("Failed to delete all stores.");
       }
     } catch (e) {
-      alert("Error deleting stores");
+      alert("Error deleting stores.");
     }
   };
 
@@ -235,60 +235,49 @@ export default function AdminPortal() {
       const res = await fetch("/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           item_zsku: itemZsku,
           pbarcode: itemBarcode,
-          product_title: itemTitle, 
-          brand: itemBrand,
-          unit_size: itemUnitSize,
-          unit_type: itemUnitType,
-          imageUrl: itemImage,
-          substitute_zsku: itemSub,
+          product_title: itemTitle,
+          brand: itemBrand || null,
+          unit_size: itemUnitSize || null,
+          unit_type: itemUnitType || null,
+          imageUrl: itemImage || null,
+          substitute_zsku: itemSub || null,
           item_type: itemType,
           category: itemCategory,
-          max_qty: itemMaxQty 
+          max_qty: itemMaxQty || null
         }),
       });
       if (res.ok) {
-        alert("Item saved successfully!");
+        alert("Item added successfully!");
         setItemZsku("");
         setItemBarcode("");
         setItemTitle("");
         setItemBrand("");
         setItemUnitSize("");
-        setItemUnitType("ml");
         setItemImage("");
         setItemSub("");
         setItemMaxQty("");
         loadData();
       } else {
-        alert("Failed to save item.");
+        alert("Failed to add item.");
       }
     } catch (e) {
       alert("Error adding item.");
     }
   };
 
-  const toggleStock = async (item_zsku: string, currentStatus: boolean) => {
+  const toggleStock = async (item_zsku: string, currentStock: boolean) => {
     try {
       await fetch("/api/items", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_zsku, in_stock: !currentStatus }),
+        body: JSON.stringify({ item_zsku, in_stock: !currentStock }),
       });
       loadData();
     } catch (e) {
       alert("Error updating stock status");
-    }
-  };
-
-  const removeItem = async (item_zsku: string, product_title: string) => {
-    if (!confirm(`Are you sure you want to permanently remove "${product_title}"?`)) return;
-    try {
-      await fetch(`/api/items?item_zsku=${encodeURIComponent(item_zsku)}`, { method: "DELETE" });
-      loadData();
-    } catch (e) {
-      alert("Error removing item");
     }
   };
 
@@ -298,17 +287,39 @@ export default function AdminPortal() {
       const res = await fetch("/api/items", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingItem),
+        body: JSON.stringify({
+          item_zsku: editingItem.item_zsku,
+          pbarcode: editingItem.pbarcode,
+          product_title: editingItem.product_title,
+          brand: editingItem.brand || null,
+          unit_size: editingItem.unit_size || null,
+          unit_type: editingItem.unit_type || null,
+          imageUrl: editingItem.imageUrl || null,
+          substitute_zsku: editingItem.substitute_zsku || null,
+          item_type: editingItem.item_type || "GENERAL",
+          category: editingItem.category || "INGREDIENTS",
+          max_qty: editingItem.max_qty || null
+        }),
       });
       if (res.ok) {
-        alert("Item updated successfully!");
+        alert("Item updated!");
         setEditingItem(null);
         loadData();
       } else {
-        alert("Failed to update item.");
+        alert("Failed to update item");
       }
     } catch (e) {
-      alert("Error updating item");
+      alert("Error saving edit");
+    }
+  };
+
+  const removeItem = async (item_zsku: string, title: string) => {
+    if (!confirm(`Are you sure you want to remove ${title}?`)) return;
+    try {
+      await fetch(`/api/items?item_zsku=${item_zsku}`, { method: "DELETE" });
+      loadData();
+    } catch (e) {
+      alert("Error removing item");
     }
   };
 
@@ -382,17 +393,17 @@ export default function AdminPortal() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
-      <div className="flex justify-between items-center mb-6">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 space-y-6 pb-20">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Admin Dashboard</h1>
           <p className="text-xs text-gray-500 mt-1">
             Logged in as Admin: <span className="font-semibold text-gray-700">{currentUserEmail}</span>
           </p>
         </div>
         <a 
           href="/" 
-          className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg font-bold transition flex items-center space-x-1"
+          className="self-start sm:self-auto text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-lg font-bold transition flex items-center space-x-1"
         >
           <span>☕ Go to Cafe Portal</span>
         </a>
@@ -401,7 +412,7 @@ export default function AdminPortal() {
       {/* Edit Item Modal */}
       {editingItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 space-y-3 max-h-screen overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-5 sm:p-6 space-y-3 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-1">Edit SKU Details</h2>
             <p className="text-xs font-mono text-gray-400 mb-2">SKU: {editingItem.item_zsku}</p>
 
@@ -465,21 +476,21 @@ export default function AdminPortal() {
             </select>
 
             <div className="flex space-x-3 pt-3">
-              <button onClick={saveEdit} className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 flex-1">Save Changes</button>
-              <button onClick={() => setEditingItem(null)} className="bg-gray-200 text-gray-700 px-6 py-2 rounded font-bold hover:bg-gray-300 flex-1">Cancel</button>
+              <button onClick={saveEdit} className="bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-green-700 flex-1 text-sm shadow-sm transition">Save Changes</button>
+              <button onClick={() => setEditingItem(null)} className="bg-gray-200 text-gray-700 px-6 py-2.5 rounded-lg font-bold hover:bg-gray-300 flex-1 text-sm transition">Cancel</button>
             </div>
           </div>
         </div>
       )}
 
       {/* Admin Access Management Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
         <h2 className="text-xl font-bold mb-2">Admin Access Management</h2>
         <p className="text-xs text-gray-500 mb-4">
           Only users with emails in this list can access the Admin Dashboard.
         </p>
 
-        <form onSubmit={addAdmin} className="flex space-x-3 mb-4">
+        <form onSubmit={addAdmin} className="flex flex-col sm:flex-row gap-2 sm:space-x-3 mb-4">
           <input
             type="email"
             placeholder="colleague@noon.com"
@@ -500,15 +511,15 @@ export default function AdminPortal() {
           {adminList.map((adminEmail) => (
             <div key={adminEmail} className="p-3 flex justify-between items-center text-sm">
               <div className="flex items-center space-x-2">
-                <span className="font-semibold text-gray-800">{adminEmail}</span>
+                <span className="font-semibold text-gray-800 break-all">{adminEmail}</span>
                 {adminEmail === currentUserEmail && (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold">You</span>
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold flex-shrink-0">You</span>
                 )}
               </div>
               {adminList.length > 1 && (
                 <button
                   onClick={() => removeAdmin(adminEmail)}
-                  className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50"
+                  className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 flex-shrink-0"
                 >
                   Revoke Access
                 </button>
@@ -519,9 +530,9 @@ export default function AdminPortal() {
       </div>
 
       {/* Settings Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
         <h2 className="text-xl font-bold mb-4">Settings</h2>
-        <div className="flex items-end space-x-4">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Daily Cut-off Time
@@ -530,19 +541,19 @@ export default function AdminPortal() {
               type="time"
               value={cutoffTime}
               onChange={(e) => setCutoffTime(e.target.value)}
-              className="border p-2 rounded w-48"
+              className="border p-2 rounded w-full sm:w-48"
             />
           </div>
-          <button onClick={saveSettings} className="bg-black text-white px-6 py-2 rounded font-semibold hover:bg-gray-800">
+          <button onClick={saveSettings} className="bg-black text-white px-6 py-2 rounded font-semibold hover:bg-gray-800 self-start sm:self-auto">
             Save
           </button>
         </div>
       </div>
 
       {/* Reports Section */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
         <h2 className="text-xl font-bold mb-4">Export Daily Orders Report</h2>
-        <div className="flex items-end space-x-4">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">
               Select Date
@@ -551,28 +562,30 @@ export default function AdminPortal() {
               type="date"
               value={reportDate}
               onChange={(e) => setReportDate(e.target.value)}
-              className="border p-2 rounded w-48"
+              className="border p-2 rounded w-full sm:w-48"
             />
           </div>
-          <button onClick={() => downloadReport('xlsx')} className="bg-yellow-400 text-black px-5 py-2 rounded-lg font-bold hover:bg-yellow-500 text-sm flex items-center space-x-1.5 shadow-sm">
-            <span>📊</span>
-            <span>Download Excel (.xlsx)</span>
-          </button>
-          <button onClick={() => downloadReport('csv')} className="bg-emerald-600 text-white px-5 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm flex items-center space-x-1.5 shadow-sm">
-            <span>📄</span>
-            <span>Download CSV (.csv)</span>
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => downloadReport('xlsx')} className="bg-yellow-400 text-black px-4 py-2 rounded-lg font-bold hover:bg-yellow-500 text-sm flex items-center space-x-1.5 shadow-sm">
+              <span>📊</span>
+              <span>Download Excel (.xlsx)</span>
+            </button>
+            <button onClick={() => downloadReport('csv')} className="bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-emerald-700 text-sm flex items-center space-x-1.5 shadow-sm">
+              <span>📄</span>
+              <span>Download CSV (.csv)</span>
+            </button>
+          </div>
         </div>
       </div>
       
       {/* Manage Stores */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
           <h2 className="text-xl font-bold">Manage Stores ({stores.length})</h2>
           {stores.length > 0 && (
             <button 
               onClick={deleteAllStores}
-              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg text-sm font-bold transition"
+              className="self-start sm:self-auto bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg text-sm font-bold transition"
             >
               🗑️ Delete All Stores
             </button>
@@ -582,7 +595,7 @@ export default function AdminPortal() {
         {/* Add Store Form */}
         <form onSubmit={addStore} className="space-y-3 bg-gray-50 p-4 rounded-lg mb-6 border">
           <h3 className="font-semibold text-sm text-gray-700">Add New Store</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input 
               type="text" 
               placeholder="DS Code (e.g. DXBDS22)" 
@@ -621,14 +634,14 @@ export default function AdminPortal() {
         </form>
 
         {/* Search stores */}
-        <div className="flex justify-between items-center mb-2">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-2">
           <h3 className="font-bold text-gray-800">Active Stores List ({filteredStores.length})</h3>
           <input 
             type="text"
             placeholder="Search stores..."
             value={storeSearch}
             onChange={e => setStoreSearch(e.target.value)}
-            className="border p-1.5 rounded text-sm w-56"
+            className="border p-1.5 rounded text-sm w-full sm:w-56"
           />
         </div>
 
@@ -637,9 +650,9 @@ export default function AdminPortal() {
             <div className="p-4 text-center text-gray-400 text-sm">No stores found.</div>
           ) : (
             filteredStores.map(s => (
-              <div key={s.ds_code} className="p-3 flex justify-between items-center hover:bg-gray-50 text-sm">
+              <div key={s.ds_code} className="p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-gray-50 text-sm">
                 <div className="space-y-0.5">
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                     <span className="font-bold text-gray-900">{s.ds_name}</span>
                     <span className="text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded font-mono">{s.ds_code}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
@@ -654,10 +667,10 @@ export default function AdminPortal() {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <button
                     onClick={() => toggleStoreBrand(s.ds_code, s.store_type)}
-                    className={`px-3 py-1 rounded text-xs font-bold border transition ${
+                    className={`px-2.5 py-1 rounded text-xs font-bold border transition ${
                       s.store_type === "NATIVE"
                         ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
                         : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"
@@ -672,7 +685,7 @@ export default function AdminPortal() {
                       const newEmail = prompt(`Enter new email for ${s.ds_name} (${s.ds_code}):`, s.email || "");
                       if (newEmail !== null) updateStoreEmail(s.ds_code, newEmail);
                     }}
-                    className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium"
                     title="Edit Email"
                   >
                     ✏️ Email
@@ -692,15 +705,15 @@ export default function AdminPortal() {
       </div>
 
       {/* Manage Items */}
-      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
         <h2 className="text-xl font-bold mb-4">Add New Item SKU</h2>
         <form onSubmit={addItem} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <input type="text" placeholder="Item ZSKU" required value={itemZsku} onChange={(e) => setItemZsku(e.target.value)} className="border p-2 rounded text-sm font-mono" />
             <input type="text" placeholder="Barcodes (comma separated)" required value={itemBarcode} onChange={(e) => setItemBarcode(e.target.value)} className="border p-2 rounded text-sm font-mono" />
-            <input type="text" placeholder="Product Title" required value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} className="border p-2 rounded col-span-2 text-sm" />
-            <input type="text" placeholder="Brand (e.g. just_chill, davinci, subko)" value={itemBrand} onChange={(e) => setItemBrand(e.target.value)} className="border p-2 rounded col-span-2 text-sm" />
-            <div className="flex space-x-2 col-span-2">
+            <input type="text" placeholder="Product Title" required value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} className="border p-2 rounded sm:col-span-2 text-sm" />
+            <input type="text" placeholder="Brand (e.g. just_chill, davinci, subko)" value={itemBrand} onChange={(e) => setItemBrand(e.target.value)} className="border p-2 rounded sm:col-span-2 text-sm" />
+            <div className="flex space-x-2 sm:col-span-2">
               <input type="text" placeholder="Unit Size (e.g. 250, 1, 1.89)" value={itemUnitSize} onChange={(e) => setItemUnitSize(e.target.value)} className="border p-2 rounded w-1/2 text-sm" />
               <select value={itemUnitType} onChange={(e) => setItemUnitType(e.target.value)} className="border p-2 rounded w-1/2 bg-white text-sm">
                 <option value="ml">ml</option>
@@ -722,86 +735,118 @@ export default function AdminPortal() {
             </select>
             <input type="url" placeholder="Image URL (Optional)" value={itemImage} onChange={(e) => setItemImage(e.target.value)} className="border p-2 rounded text-sm" />
             <input type="number" placeholder="Order Limit / Max Qty (Optional)" value={itemMaxQty} onChange={(e) => setItemMaxQty(e.target.value)} className="border p-2 rounded text-sm" />
-            <input type="text" placeholder="Substitute ZSKU (Optional)" value={itemSub} onChange={(e) => setItemSub(e.target.value)} className="border p-2 rounded col-span-2 text-sm font-mono" />
+            <input type="text" placeholder="Substitute ZSKU (Optional)" value={itemSub} onChange={(e) => setItemSub(e.target.value)} className="border p-2 rounded sm:col-span-2 text-sm font-mono" />
           </div>
-          <button type="submit" className="bg-green-600 text-white px-6 py-2 rounded font-bold hover:bg-green-700 text-sm">
+          <button type="submit" className="w-full sm:w-auto bg-green-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-green-700 text-sm shadow-sm transition">
             + Add SKU
           </button>
         </form>
 
         {/* Item Search & Management List */}
-        <div className="flex justify-between items-center mt-8 mb-3">
-          <h3 className="font-bold text-gray-800">All Items ({filteredItems.length})</h3>
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mt-8 mb-3">
+          <h3 className="font-bold text-gray-800 text-base sm:text-lg">All Items ({filteredItems.length})</h3>
           <input
             type="text"
             placeholder="Search items by name, SKU, brand..."
             value={itemSearch}
             onChange={e => setItemSearch(e.target.value)}
-            className="border p-1.5 rounded text-sm w-72"
+            className="border p-2 rounded-lg text-sm w-full sm:w-72 shadow-sm focus:ring-2 focus:ring-yellow-400 focus:outline-none"
           />
         </div>
 
-        <div className="max-h-96 overflow-y-auto border rounded-lg divide-y">
+        <div className="max-h-[600px] overflow-y-auto border rounded-xl divide-y bg-white shadow-inner">
           {filteredItems.map(i => (
-            <div key={i.item_zsku} className="flex justify-between items-center p-3 hover:bg-gray-50 text-sm">
-              <div className="flex items-center space-x-3 w-3/5">
-                {i.imageUrl ? (
-                  <img src={i.imageUrl} alt={i.product_title} className="w-12 h-12 object-cover rounded-lg border bg-white flex-shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-lg border bg-gray-100 flex items-center justify-center text-gray-400 text-xs flex-shrink-0">
-                    No img
-                  </div>
-                )}
-                <div>
-                  <div className="font-bold text-gray-900 leading-tight">{i.product_title}</div>
-                  <div className="text-xs text-gray-500 mt-0.5 space-x-1.5 flex flex-wrap items-center">
-                    <span className="font-mono text-gray-400">{i.item_zsku}</span>
-                    {i.brand && <span className="text-blue-600 font-semibold">• {i.brand}</span>}
-                    {i.unit_size && i.unit_type && <span>• {i.unit_size} {i.unit_type}</span>}
-                    <span className="text-xs px-1.5 py-0.2 bg-gray-100 rounded text-gray-600 font-medium">{i.category}</span>
-                    <span className={`text-xs px-1.5 py-0.2 rounded font-semibold ${
-                      i.item_type === "NATIVE_ONLY" ? "bg-purple-100 text-purple-700" :
-                      i.item_type === "SHOT_ONLY" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"
-                    }`}>
-                      {i.item_type}
-                    </span>
+            <div key={i.item_zsku} className="p-3 sm:p-4 hover:bg-gray-50 text-sm transition">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                {/* Product Info (Left) */}
+                <div className="flex items-start space-x-3 flex-1 min-w-0">
+                  {i.imageUrl ? (
+                    <img 
+                      src={i.imageUrl} 
+                      alt={i.product_title} 
+                      className="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-lg border bg-white flex-shrink-0" 
+                    />
+                  ) : (
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg border bg-gray-100 flex items-center justify-center text-gray-400 text-xs font-medium flex-shrink-0">
+                      No img
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-gray-900 leading-snug text-sm sm:text-base break-words">
+                      {i.product_title}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded text-[11px] font-semibold">
+                        {i.item_zsku}
+                      </span>
+                      {i.brand && (
+                        <span className="text-blue-600 font-semibold bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">
+                          {i.brand}
+                        </span>
+                      )}
+                      {i.unit_size && i.unit_type && (
+                        <span className="text-gray-600 font-medium text-[11px]">
+                          • {i.unit_size} {i.unit_type}
+                        </span>
+                      )}
+                      <span className="text-[11px] px-1.5 py-0.5 bg-gray-100 rounded text-gray-700 font-medium">
+                        {i.category}
+                      </span>
+                      <span className={`text-[11px] px-1.5 py-0.5 rounded font-bold ${
+                        i.item_type === "NATIVE_ONLY" ? "bg-purple-100 text-purple-700 border border-purple-200" :
+                        i.item_type === "SHOT_ONLY" ? "bg-blue-100 text-blue-700 border border-blue-200" : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {i.item_type}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex items-center space-x-2 w-2/5 justify-end">
-                <div className="flex flex-col items-center">
-                  <label className="text-[10px] text-gray-400 uppercase font-semibold">Limit</label>
-                  <input 
-                    type="number" 
-                    placeholder="None" 
-                    defaultValue={i.max_qty || ""} 
-                    onBlur={(e) => updateMaxQty(i.item_zsku, e.target.value)}
-                    className="border p-1 rounded w-16 text-center text-xs" 
-                  />
+                {/* SKU Actions & Controls (Right / Bottom on mobile) */}
+                <div className="flex items-center justify-between md:justify-end gap-2 pt-2 md:pt-0 border-t md:border-t-0 border-gray-100 flex-wrap">
+                  {/* Limit input */}
+                  <div className="flex items-center space-x-1 bg-gray-50 px-2 py-1 rounded-lg border border-gray-200">
+                    <label className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Limit</label>
+                    <input 
+                      type="number" 
+                      placeholder="∞" 
+                      defaultValue={i.max_qty || ""} 
+                      onBlur={(e) => updateMaxQty(i.item_zsku, e.target.value)}
+                      className="border border-gray-300 bg-white p-1 rounded w-14 text-center text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-yellow-400" 
+                    />
+                  </div>
+
+                  {/* Stock Toggle */}
+                  <button 
+                    onClick={() => toggleStock(i.item_zsku, i.in_stock)}
+                    className={`px-3 py-1.5 text-xs rounded-lg font-bold transition flex items-center space-x-1 shadow-sm ${
+                      i.in_stock 
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200' 
+                        : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                    }`}
+                  >
+                    <span>{i.in_stock ? "✓ In Stock" : "✕ OOS"}</span>
+                  </button>
+
+                  {/* Edit SKU */}
+                  <button
+                    onClick={() => setEditingItem({...i})}
+                    className="px-3 py-1.5 text-xs rounded-lg font-bold bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 transition flex items-center space-x-1"
+                    title="Edit SKU and Image"
+                  >
+                    <span>✏️</span>
+                    <span>Edit</span>
+                  </button>
+
+                  {/* Remove SKU */}
+                  <button
+                    onClick={() => removeItem(i.item_zsku, i.product_title)}
+                    className="px-2.5 py-1.5 text-xs rounded-lg font-bold text-red-500 hover:bg-red-50 hover:text-red-700 border border-transparent hover:border-red-200 transition"
+                    title="Remove SKU"
+                  >
+                    Remove
+                  </button>
                 </div>
-                <button 
-                  onClick={() => toggleStock(i.item_zsku, i.in_stock)}
-                  className={`px-2.5 py-1 text-xs rounded font-bold transition ${
-                    i.in_stock ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'
-                  }`}
-                >
-                  {i.in_stock ? "In Stock" : "OOS"}
-                </button>
-                <button
-                  onClick={() => setEditingItem({...i})}
-                  className="px-2.5 py-1 text-xs rounded font-bold bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-700 transition"
-                  title="Edit SKU and Image"
-                >
-                  ✏️ Edit
-                </button>
-                <button
-                  onClick={() => removeItem(i.item_zsku, i.product_title)}
-                  className="px-2 py-1 text-xs rounded font-bold text-red-500 hover:bg-red-50 hover:text-red-700 transition"
-                  title="Remove SKU"
-                >
-                  Remove
-                </button>
               </div>
             </div>
           ))}
