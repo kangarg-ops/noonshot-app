@@ -100,11 +100,48 @@ export default function BaristaPortal() {
     setIsAdminMode(false);
   };
 
-  const updateCart = (zsku: string, qty: number, max: number | null) => {
+  const isSubkoBean = (item: any) => {
+    if (!item) return false;
+    const t = (item.product_title || "").toLowerCase();
+    const b = (item.brand || "").toLowerCase();
+    return t.includes("subko") || b.includes("subko") || t.includes("native blend") || t.includes("niche blend");
+  };
+
+  const isSubkoNiche = (item: any) => {
+    if (!item) return false;
+    const t = (item.product_title || "").toLowerCase();
+    return isSubkoBean(item) && t.includes("niche");
+  };
+
+  const getItemEffectiveLimit = (item: any) => {
+    if (!item) return null;
+    if (!item.in_stock || item.max_qty === 0) return 0;
+    if (isSubkoNiche(item)) return 1; // 1 max per day (1 only, max 2/month)
+    if (isSubkoBean(item)) return 1; // 1 max per day
+    if (item.max_qty !== null && item.max_qty !== undefined && item.max_qty >= 0) return item.max_qty;
+    return null;
+  };
+
+  const updateCart = (zsku: string, qty: number, item?: any) => {
+    const it = item || items.find(i => i.item_zsku === zsku);
+    const limit = it ? getItemEffectiveLimit(it) : null;
     const finalQty = Math.max(0, isNaN(qty) ? 0 : qty);
-    if (max && max > 0 && finalQty > max) {
-      alert(`Maximum order limit for this item is ${max}`);
-      return;
+
+    if (limit !== null) {
+      if (limit === 0 && finalQty > 0) {
+        alert("This item is currently Out of Stock (Order limit is set to 0).");
+        return;
+      }
+      if (finalQty > limit) {
+        if (it && isSubkoNiche(it)) {
+          alert("SUBKO Niche Blend allocation: Maximum 1 unit per day per store (Monthly allocation: 1-2 units max).");
+        } else if (it && isSubkoBean(it)) {
+          alert("SUBKO Speciality Coffee limit: Maximum 1 unit per day per store.");
+        } else {
+          alert(`Maximum order limit for this item is ${limit}`);
+        }
+        return;
+      }
     }
     setCart(prev => ({ ...prev, [zsku]: finalQty }));
   };
@@ -239,7 +276,7 @@ export default function BaristaPortal() {
           id: "NATIVE_COFFEE",
           title: "☕ Coffee Beans (SUBKO Speciality Coffee - NATIVE & NICHE)",
           badge: "SUBKO Collab",
-          desc: "NATIVE Blend & NICHE Blend from SUBKO.",
+          desc: "NATIVE Blend & NICHE Blend from SUBKO (Daily limit: 1 bag/day; Niche Blend: 1–2 bags max/month).",
           items: subkoBeans,
           subsections: [
             {
@@ -322,8 +359,15 @@ export default function BaristaPortal() {
   // Card component
   const ItemCard = ({ item }: { item: any }) => {
     const qty = cart[item.item_zsku] || 0;
+    const isSubko = isSubkoBean(item);
+    const isNiche = isSubkoNiche(item);
+    const isOos = !item.in_stock || item.max_qty === 0;
+    const effectiveLimit = getItemEffectiveLimit(item);
+
     return (
-      <div className="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border border-stone-200 transition flex flex-col justify-between space-y-3">
+      <div className={`bg-white rounded-2xl p-4 shadow-sm hover:shadow-md border transition flex flex-col justify-between space-y-3 ${
+        isOos ? 'border-red-200 bg-red-50/20' : 'border-stone-200'
+      }`}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             {item.brand && (
@@ -336,31 +380,54 @@ export default function BaristaPortal() {
                 {item.unit_size} {item.unit_type}
               </span>
             )}
-            {item.max_qty && (
+            {item.max_qty === 0 && (
+              <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-rose-300">
+                Max: 0
+              </span>
+            )}
+            {item.max_qty !== null && item.max_qty !== undefined && item.max_qty > 0 && !isSubko && (
               <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-rose-200">
                 Max: {item.max_qty}
               </span>
             )}
+            {isNiche && (
+              <span className="bg-purple-100 text-purple-900 text-[10px] font-black px-2 py-0.5 rounded-md border border-purple-200">
+                Max: 1 / day (Monthly: 1–2)
+              </span>
+            )}
+            {isSubko && !isNiche && (
+              <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-300">
+                Max: 1 / day
+              </span>
+            )}
           </div>
-          {!item.in_stock ? (
-            <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md">OOS</span>
+          {isOos ? (
+            <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2.5 py-0.5 rounded-md border border-rose-200">
+              OUT OF STOCK
+            </span>
           ) : (
-            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-emerald-200">In Stock</span>
+            <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-emerald-200">
+              In Stock
+            </span>
           )}
         </div>
 
         <div className="space-y-1">
-          <h4 className="font-extrabold text-stone-900 text-base leading-snug">{item.product_title}</h4>
+          <h4 className={`font-extrabold text-base leading-snug ${isOos ? 'text-stone-500' : 'text-stone-900'}`}>
+            {item.product_title}
+          </h4>
           <div className="flex flex-wrap items-center gap-x-2 text-[11px] font-mono text-stone-500">
             <span>SKU: {item.item_zsku}</span>
             {item.barcode && <span>• Barcode: {item.barcode}</span>}
           </div>
         </div>
 
-        {!item.in_stock && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium p-2 rounded-xl">
+        {isOos && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium p-2.5 rounded-xl">
             {item.substitute_zsku ? (
               <>⚠️ OOS: Replaced with SKU <span className="font-mono font-bold">{item.substitute_zsku}</span></>
+            ) : item.max_qty === 0 ? (
+              <>⚠️ Currently Unavailable (Order limit is set to 0)</>
             ) : (
               <>⚠️ Currently Out of Stock</>
             )}
@@ -369,10 +436,14 @@ export default function BaristaPortal() {
 
         <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
           <span className="text-xs font-bold text-stone-500">Order Qty:</span>
-          {qty === 0 ? (
+          {isOos ? (
+            <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
+              OOS (Limit: 0)
+            </div>
+          ) : qty === 0 ? (
             <button
               type="button"
-              onClick={() => updateCart(item.item_zsku, 1, item.max_qty)}
+              onClick={() => updateCart(item.item_zsku, 1, item)}
               className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm hover:scale-105 active:scale-95 transition ${
                 isNative ? "bg-[#1864AB] text-white hover:bg-[#13508A]" : "bg-[#6B0B20] text-white hover:bg-[#520818]"
               }`}
@@ -383,7 +454,7 @@ export default function BaristaPortal() {
             <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
               <button
                 type="button"
-                onClick={() => updateCart(item.item_zsku, qty - 1, item.max_qty)}
+                onClick={() => updateCart(item.item_zsku, qty - 1, item)}
                 className="w-7 h-7 rounded-full bg-white text-stone-800 font-black text-sm flex items-center justify-center shadow-sm"
               >
                 –
@@ -391,14 +462,14 @@ export default function BaristaPortal() {
               <input
                 type="number"
                 min="0"
-                max={item.max_qty || undefined}
+                max={effectiveLimit || undefined}
                 value={qty}
-                onChange={e => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item.max_qty)}
+                onChange={e => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item)}
                 className="w-12 text-center font-black text-sm bg-transparent outline-none"
               />
               <button
                 type="button"
-                onClick={() => updateCart(item.item_zsku, qty + 1, item.max_qty)}
+                onClick={() => updateCart(item.item_zsku, qty + 1, item)}
                 className={`w-7 h-7 rounded-full text-white font-black text-sm flex items-center justify-center shadow-sm ${
                   isNative ? "bg-[#1864AB]" : "bg-[#6B0B20]"
                 }`}
@@ -517,7 +588,7 @@ export default function BaristaPortal() {
       <header className={`sticky top-0 z-30 transition-colors shadow-md ${
         isNative ? "bg-[#1864AB] text-white" : "bg-[#6B0B20] text-white"
       }`}>
-        <div className="max-w-3xl mx-auto px-4 pt-3.5 pb-3.5 space-y-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3.5 pb-3.5 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               {isNative ? (
@@ -614,10 +685,10 @@ export default function BaristaPortal() {
 
       {/* 2. SECTION FILTER BAR */}
       <div className="bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm sticky top-[138px] z-20">
-        <div className="max-w-3xl mx-auto px-4 py-2 flex items-center space-x-1.5 overflow-x-auto no-scrollbar">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center space-x-2 overflow-x-auto no-scrollbar">
           <button
             onClick={() => setSelectedSection("ALL")}
-            className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap ${
+            className={`px-3.5 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap ${
               selectedSection === "ALL" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
             }`}
           >
@@ -628,7 +699,7 @@ export default function BaristaPortal() {
             <button
               key={sec.id}
               onClick={() => setSelectedSection(sec.id)}
-              className={`px-3 py-1 rounded-full text-[11px] font-black transition whitespace-nowrap border ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap border ${
                 selectedSection === sec.id
                   ? (isNative ? "bg-[#1864AB] text-white border-[#1864AB]" : "bg-[#6B0B20] text-white border-[#6B0B20]")
                   : "bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100"
@@ -640,7 +711,7 @@ export default function BaristaPortal() {
         </div>
       </div>
 
-      <main className="max-w-3xl mx-auto px-4 pt-4 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
         {/* 3. BARISTA BANNER */}
         {isNative ? (
           <div className="rounded-3xl overflow-hidden shadow-lg border border-sky-200 bg-gradient-to-b from-[#FFF9EE] to-[#FFF3DC]">
@@ -760,7 +831,7 @@ export default function BaristaPortal() {
                   </div>
 
                   {sec.items.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                       {sec.items.map(item => (
                         <ItemCard key={item.item_zsku} item={item} />
                       ))}
@@ -774,7 +845,7 @@ export default function BaristaPortal() {
                         <p className="text-xs text-stone-500">{sub.desc}</p>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                         {sub.items.map(item => (
                           <ItemCard key={item.item_zsku} item={item} />
                         ))}
@@ -790,7 +861,7 @@ export default function BaristaPortal() {
       {/* 5. FLOATING BOTTOM ORDER BAR */}
       {totalUnits > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-white/95 backdrop-blur-md border-t border-stone-200 shadow-2xl">
-          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
             <div className="space-y-0.5">
               <div className="flex items-center space-x-2">
                 <span className="bg-[#FFF000] text-black font-black text-[11px] px-2 py-0.5 rounded-md">
@@ -831,7 +902,7 @@ export default function BaristaPortal() {
       {/* 6. ORDER REVIEW MODAL */}
       {isOrderSummaryOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-6 max-h-[85vh] flex flex-col space-y-4 shadow-2xl">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-xl p-6 max-h-[85vh] flex flex-col space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="text-lg font-black text-stone-900">Review Store Replenishment Order</h3>
@@ -867,13 +938,13 @@ export default function BaristaPortal() {
                         <input
                           type="number"
                           min="0"
-                          max={it?.max_qty || undefined}
+                          max={it ? getItemEffectiveLimit(it) || undefined : undefined}
                           value={qty}
-                          onChange={e => updateCart(zsku, parseInt(e.target.value) || 0, it?.max_qty)}
+                          onChange={e => updateCart(zsku, parseInt(e.target.value) || 0, it)}
                           className="w-14 text-center font-black text-xs border rounded-lg py-1 bg-white"
                         />
                         <button
-                          onClick={() => updateCart(zsku, 0, null)}
+                          onClick={() => updateCart(zsku, 0, it)}
                           className="text-stone-400 hover:text-red-600 text-xs font-bold px-1"
                         >
                           ✕
