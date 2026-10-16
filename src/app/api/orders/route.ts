@@ -56,7 +56,7 @@ export async function POST(req: Request) {
       }
 
       const title = (dbItem.product_title || "").toLowerCase();
-      const brand = (dbItem.brand || "").toLowerCase();
+      const brand = ((dbItem as any).brand || "").toLowerCase();
       const isSubkoBean = title.includes("subko") || brand.includes("subko") || title.includes("native blend") || title.includes("niche blend");
       const isSubkoNiche = isSubkoBean && title.includes("niche");
 
