@@ -13,18 +13,22 @@ export async function GET(req: Request) {
     const [cutoffHour, cutoffMin] = cutoffTime.split(':').map(Number);
     
     let targetDate = new Date();
+    let y = targetDate.getUTCFullYear();
+    let m = targetDate.getUTCMonth();
+    let d = targetDate.getUTCDate();
+
     if (dateParam) {
-      const [y, m, d] = dateParam.split('-').map(Number);
-      targetDate = new Date(y, m - 1, d);
+      const parts = dateParam.split('-').map(Number);
+      y = parts[0];
+      m = parts[1] - 1;
+      d = parts[2];
     }
-    
-    // endDate = targetDate at cutoffTime
-    const endDate = new Date(targetDate);
-    endDate.setHours(cutoffHour, cutoffMin, 0, 0);
-    
-    // startDate = previous day at cutoffTime
-    const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 1);
+
+    // Cutoff calculation in IST (UTC+5:30)
+    const cutoffMinutesFromMidnight = (cutoffHour * 60 + cutoffMin) - (5 * 60 + 30);
+    const endTimestamp = Date.UTC(y, m, d, 0, cutoffMinutesFromMidnight, 0, 0);
+    const endDate = new Date(endTimestamp);
+    const startDate = new Date(endDate.getTime() - 24 * 60 * 60 * 1000);
     
     const orders = await prisma.order.findMany({
       where: {
@@ -43,7 +47,7 @@ export async function GET(req: Request) {
       }
     });
     
-    // Aggregate: Group by ds_code, then by item_zsku, and take MAX qty across submissions
+    // Aggregate: Group by ds_code, then by item_zsku, taking MAX qty across submissions
     const aggregated: Record<string, Record<string, any>> = {};
     
     orders.forEach(order => {
@@ -54,10 +58,27 @@ export async function GET(req: Request) {
       
       order.items.forEach(orderItem => {
         const itemCode = orderItem.item_zsku;
-        const currentQty = orderItem.zsku_qty;
-        
-        // src_wh_code logic: Abu Dhabi (AUH) uses AUHID02, Dubai (DXB) uses DXBID04
-        const src_wh_code = storeCode.toUpperCase().startsWith("AUH") ? "AUHID02" : "DXBID04";
+        const currentQty = Math.max(0, parseInt(orderItem.zsku_qty as any) || 0);
+
+        // Exclude anything that has 0 qty or is not ordered
+        if (currentQty <= 0) return;
+
+        // Exclude items that are marked Out of Stock or have Max Qty = 0
+        if (orderItem.item && (!orderItem.item.in_stock || orderItem.item.max_qty === 0)) {
+          return;
+        }
+
+        // Warehouse routing logic:
+        // AUHID02 for AUHDS and AINDS
+        // DXBID04 for DXBDS and SHJDS
+        const storeCodeUpper = storeCode.toUpperCase();
+        let src_wh_code = "DXBID04";
+        if (storeCodeUpper.startsWith("AUH") || storeCodeUpper.startsWith("AIN")) {
+          src_wh_code = "AUHID02";
+        } else if (storeCodeUpper.startsWith("DXB") || storeCodeUpper.startsWith("SHJ")) {
+          src_wh_code = "DXBID04";
+        }
+
         const dst_wh_code = storeCode;
         const partner_id = "294928";
         const barcode = orderItem.item?.pbarcode || "";
@@ -78,7 +99,7 @@ export async function GET(req: Request) {
             STORE: storeName
           };
         } else {
-          // Rule: Take the MAX quantity across submissions for the same SKU
+          // Take the MAX quantity across submissions for the same SKU
           if (currentQty > aggregated[storeCode][itemCode].Quantity) {
             aggregated[storeCode][itemCode].Quantity = currentQty;
           }
@@ -97,11 +118,12 @@ export async function GET(req: Request) {
       }
     }
     
-    // Flatten rows with exact column order
+    // Flatten rows with exact column order, omitting any 0 or OOS items
     const data: any[] = [];
     for (const storeCode in aggregated) {
       for (const itemCode in aggregated[storeCode]) {
         const r = aggregated[storeCode][itemCode];
+        if (!r.Quantity || r.Quantity <= 0) continue;
         data.push({
           "src_wh_code": r.src_wh_code,
           "dst_wh_code": r.dst_wh_code,
@@ -116,8 +138,22 @@ export async function GET(req: Request) {
       }
     }
     
-    const ws = xlsx.utils.json_to_sheet(data);
-    const dateStr = dateParam || targetDate.toISOString().split('T')[0];
+    const dateStr = dateParam || new Date(endTimestamp).toISOString().split('T')[0];
+
+    // If no orders found, output template with headers
+    const ws = data.length > 0
+      ? xlsx.utils.json_to_sheet(data)
+      : xlsx.utils.json_to_sheet([{
+          "src_wh_code": "",
+          "dst_wh_code": "",
+          "partner_id": "",
+          "barcode": "",
+          "Quantity": "",
+          "ZSKU": "",
+          "Title": "",
+          "Category": "",
+          "STORE": ""
+        }]);
 
     if (format === 'csv') {
       const csvContent = xlsx.utils.sheet_to_csv(ws);
