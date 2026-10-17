@@ -15,6 +15,13 @@ export default function BaristaPortal() {
   const [admins, setAdmins] = useState<string[]>([]);
   const [userEmail, setUserEmail] = useState<string>("");
   const [loginInput, setLoginInput] = useState<string>("");
+  const [loginStep, setLoginStep] = useState<"EMAIL" | "OTP">("EMAIL");
+  const [otpCode, setOtpCode] = useState("");
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [devPreviewCode, setDevPreviewCode] = useState("");
+  const [resendCountdown, setResendCountdown] = useState(0);
+
   const [selectedStore, setSelectedStore] = useState<any>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,8 +34,31 @@ export default function BaristaPortal() {
   const [isOrderSummaryOpen, setIsOrderSummaryOpen] = useState(false);
 
   useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCountdown(prev => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
+
+  useEffect(() => {
     const saved = localStorage.getItem("noon_user_email");
-    if (saved) setUserEmail(saved.toLowerCase());
+    const expiryStr = localStorage.getItem("noon_session_expires_at");
+    const expiry = expiryStr ? parseInt(expiryStr) : 0;
+
+    if (saved && expiry) {
+      if (Date.now() < expiry) {
+        setUserEmail(saved.toLowerCase());
+      } else {
+        localStorage.removeItem("noon_user_email");
+        localStorage.removeItem("noon_session_expires_at");
+        setUserEmail("");
+        setLoginError("Your session has expired. Please verify your email with a new code.");
+      }
+    } else if (saved) {
+      setUserEmail(saved.toLowerCase());
+    }
+
     fetch("/api/stores").then(r => r.json()).then(d => Array.isArray(d) && setStores(d));
     fetch("/api/items").then(r => r.json()).then(d => Array.isArray(d) && setItems(d));
     fetch("/api/admins").then(r => r.json()).then(d => Array.isArray(d) && setAdmins(d.map((a: any) => a.email.toLowerCase())));
@@ -75,6 +105,7 @@ export default function BaristaPortal() {
       if (!selectedStore) setSelectedStore(stores[0]);
     } else {
       localStorage.removeItem("noon_user_email");
+      localStorage.removeItem("noon_session_expires_at");
       setUserEmail("");
       setSelectedStore(null);
       setIsAdminMode(false);
@@ -84,12 +115,13 @@ export default function BaristaPortal() {
     }
   }, [userEmail, stores, admins]);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoginError("");
+    setDevPreviewCode("");
     const email = loginInput.trim().toLowerCase();
     if (!email.endsWith("@noon.com")) {
-      setLoginError("Please use your official @noon.com email address.");
+      setLoginError("Please enter your official @noon.com email address.");
       return;
     }
     if (stores.length === 0) {
@@ -97,44 +129,79 @@ export default function BaristaPortal() {
       return;
     }
 
-    const matched = stores.find(s => matchStoreByEmail(s, email));
-    const isGlobal = (admins.includes(email) || email === "kangarg@noon.com") && !matched;
-    const supervisorRole = SUPERVISORS[email];
+    setIsSendingOtp(true);
+    try {
+      const res = await fetch("/api/auth/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "send", email }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLoginStep("OTP");
+        setResendCountdown(60);
+        if (data.devPreview) {
+          setDevPreviewCode(data.devPreview);
+        }
+      } else {
+        setLoginError(data.error || "Failed to send verification code");
+      }
+    } catch (err) {
+      setLoginError("Network error. Please try again.");
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
 
-    if (matched) {
-      localStorage.setItem("noon_user_email", email);
-      setUserEmail(email);
-      setIsAdminMode(false);
-      setIsSupervisor(false);
-      setSupervisorTitle("");
-      setSelectedStore(matched);
-    } else if (isGlobal) {
-      localStorage.setItem("noon_user_email", email);
-      setUserEmail(email);
-      setIsAdminMode(true);
-      setIsSupervisor(false);
-      setSupervisorTitle("");
-      setSelectedStore(stores[0]);
-    } else if (supervisorRole) {
-      localStorage.setItem("noon_user_email", email);
-      setUserEmail(email);
-      setIsAdminMode(false);
-      setIsSupervisor(true);
-      setSupervisorTitle(supervisorRole);
-      setSelectedStore(stores[0]);
-    } else {
-      setLoginError(`Email "${email}" is not assigned to any cafe store. Please contact your manager.`);
+  const handleVerifyOtp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLoginError("");
+    const email = loginInput.trim().toLowerCase();
+    const code = otpCode.trim();
+
+    if (code.length < 6) {
+      setLoginError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    setIsVerifyingOtp(true);
+    try {
+      const res = await fetch("/api/auth/otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "verify", email, code }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem("noon_user_email", data.email);
+        localStorage.setItem("noon_session_expires_at", data.expiresAt.toString());
+        setUserEmail(data.email);
+        setLoginStep("EMAIL");
+        setOtpCode("");
+        setDevPreviewCode("");
+      } else {
+        setLoginError(data.error || "Invalid verification code");
+      }
+    } catch (err) {
+      setLoginError("Network error verifying code. Please try again.");
+    } finally {
+      setIsVerifyingOtp(false);
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem("noon_user_email");
+    localStorage.removeItem("noon_session_expires_at");
     setUserEmail("");
     setSelectedStore(null);
     setCart({});
     setIsAdminMode(false);
     setIsSupervisor(false);
     setSupervisorTitle("");
+    setLoginStep("EMAIL");
+    setOtpCode("");
+    setDevPreviewCode("");
+    setLoginError("");
   };
 
   const isSubkoBean = (item: any) => {
@@ -398,8 +465,8 @@ export default function BaristaPortal() {
       ];
     } else {
       const beans = searchedItems.filter(i => isBean(i));
+      const milks = searchedItems.filter(i => isMilk(i) && !isBean(i));
       const beansIds = new Set(beans.map(i => i.item_zsku));
-      const milks = searchedItems.filter(i => !beansIds.has(i.item_zsku) && isMilk(i));
       const milksIds = new Set(milks.map(i => i.item_zsku));
       const ingredients = searchedItems.filter(i => !beansIds.has(i.item_zsku) && !milksIds.has(i.item_zsku));
 
@@ -456,42 +523,105 @@ export default function BaristaPortal() {
             <p className="text-xs text-stone-500 font-medium">Official stock replenishment & recipe compliance system.</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">Cafe Store Email ID</label>
-              <input
-                type="email"
-                placeholder="cafe-Downtown@noon.com"
-                required
-                value={loginInput}
-                onChange={e => setLoginInput(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:outline-none"
-              />
-              <p className="text-[11px] text-stone-400 mt-1">Each store email is strictly locked to its designated cafe location.</p>
+          {loginStep === "EMAIL" ? (
+            <form onSubmit={handleSendOtp} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">Official @noon.com Email ID</label>
+                <input
+                  type="email"
+                  placeholder="cafe-Downtown@noon.com"
+                  required
+                  value={loginInput}
+                  onChange={e => setLoginInput(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:outline-none"
+                />
+                <p className="text-[11px] text-stone-400 mt-1">We will send a 6-digit login verification code to this inbox.</p>
 
-              {detectedStore && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
-                  <div className="text-[10px] font-black uppercase text-emerald-700">Verified Cafe Store:</div>
-                  <div className="font-black text-stone-900 text-sm">{detectedStore.ds_name} ({detectedStore.ds_code})</div>
-                  <div className="text-[11px] text-stone-600">Store Brand: <span className="font-bold">{detectedStore.store_type}</span> (Locked)</div>
+                {detectedStore && (
+                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
+                    <div className="text-[10px] font-black uppercase text-emerald-700">Verified Cafe Store:</div>
+                    <div className="font-black text-stone-900 text-sm">{detectedStore.ds_name} ({detectedStore.ds_code})</div>
+                    <div className="text-[11px] text-stone-600">Store Brand: <span className="font-bold">{detectedStore.store_type}</span> • Login Duration: <strong>7 Days (1 Week)</strong></div>
+                  </div>
+                )}
+
+                {detectedSupervisor && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
+                    <div className="text-[10px] font-black uppercase text-amber-700">Verified Supervisor:</div>
+                    <div className="font-black text-stone-900 text-sm">{detectedSupervisor}</div>
+                    <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration & Testing Responses</span> • Login Duration: <strong>30 Days (1 Month)</strong></div>
+                  </div>
+                )}
+              </div>
+
+              {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
+
+              <button
+                type="submit"
+                disabled={isSendingOtp}
+                className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm transition disabled:bg-stone-400"
+              >
+                {isSendingOtp ? "Sending Verification Code..." : "Send Verification Code →"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-2xl text-xs space-y-1">
+                <div className="font-black text-xs text-blue-950 uppercase tracking-wider">Verification Code Sent</div>
+                <div className="text-[11px] text-blue-800">Check your inbox for a 6-digit code sent to:</div>
+                <div className="font-mono font-bold text-stone-900 text-xs break-all">{loginInput}</div>
+              </div>
+
+              {devPreviewCode && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-900 p-3 rounded-2xl text-xs font-semibold space-y-1">
+                  <div>🧪 <strong>Instant Testing Code:</strong> <span className="font-mono text-base font-black tracking-widest text-indigo-700">{devPreviewCode}</span></div>
+                  <div className="text-[10px] text-amber-700 font-normal">Displayed directly for seamless testing before setting your RESEND_API_KEY.</div>
                 </div>
               )}
 
-              {detectedSupervisor && (
-                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
-                  <div className="text-[10px] font-black uppercase text-amber-700">Verified Supervisor Access:</div>
-                  <div className="font-black text-stone-900 text-sm">{detectedSupervisor}</div>
-                  <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration & Testing Responses</span> (Non-Admin)</div>
-                </div>
-              )}
-            </div>
+              <div>
+                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">Enter 6-Digit Code</label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="123456"
+                  required
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  className="w-full text-center tracking-[10px] font-mono font-black text-2xl py-3 rounded-2xl border border-stone-300 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:outline-none"
+                  autoFocus
+                />
+              </div>
 
-            {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
+              {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
 
-            <button type="submit" className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm transition">
-              Sign In to Store Portal →
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={isVerifyingOtp || otpCode.length < 6}
+                className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm transition disabled:bg-stone-300"
+              >
+                {isVerifyingOtp ? "Verifying..." : "Verify Code & Sign In →"}
+              </button>
+
+              <div className="flex items-center justify-between text-xs pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setLoginStep("EMAIL"); setOtpCode(""); setLoginError(""); }}
+                  className="text-stone-500 hover:text-stone-900 font-bold"
+                >
+                  ← Change Email
+                </button>
+                <button
+                  type="button"
+                  disabled={resendCountdown > 0 || isSendingOtp}
+                  onClick={() => handleSendOtp()}
+                  className={`font-bold ${resendCountdown > 0 ? 'text-stone-400 cursor-not-allowed' : 'text-[#1864AB] hover:underline'}`}
+                >
+                  {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend Code"}
+                </button>
+              </div>
+            </form>
+          )}
 
           <div className="pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
             <span>🔒 Store Replenishment System</span>
@@ -554,7 +684,7 @@ export default function BaristaPortal() {
           <div className="relative pt-0.5">
             <input
               type="text"
-              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cream chargers, cups, sugars...' : 'coffee beans, oat milk, cream chargers, syrups...'}"`}
+              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, oat milk, cups, syrups...'}"`}
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-stone-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none"
@@ -584,22 +714,21 @@ export default function BaristaPortal() {
             <button
               key={sec.id}
               onClick={() => setSelectedSection(sec.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap ${
+              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap border ${
                 selectedSection === sec.id
-                  ? isNative ? "bg-[#1864AB] text-white" : "bg-[#6B0B20] text-white"
-                  : "bg-stone-100 hover:bg-stone-200 text-stone-700"
+                  ? (isNative ? "bg-[#1864AB] text-white border-[#1864AB]" : "bg-[#6B0B20] text-white border-[#6B0B20]")
+                  : "bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100"
               }`}
             >
-              {sec.title.split("(")[0].trim()}
+              {sec.title.replace(/\s*\(.*/, "")}
             </button>
           ))}
         </div>
       </div>
 
-      {/* MAIN CONTAINER */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
-        {/* BRAND PROMISE BANNER */}
-        <div className={`p-4 sm:p-6 rounded-3xl border shadow-sm ${
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
+        {/* BARISTA BANNER */}
+        <div className={`rounded-3xl overflow-hidden shadow-lg border p-5 ${
           isNative ? 'bg-gradient-to-b from-[#FFF9EE] to-[#FFF3DC] border-sky-200' : 'bg-gradient-to-b from-[#FFF5F6] to-[#FFEBEF] border-rose-200'
         }`}>
           <div className="text-center space-y-1 mb-4">
@@ -701,23 +830,20 @@ export default function BaristaPortal() {
                             )}
 
                             <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
-                              <div className="text-xs font-black text-stone-700">
-                                {qty > 0 ? `${qty} units ordered` : "0 in order"}
-                              </div>
-
-                              {qty === 0 ? (
+                              <span className="text-xs font-bold text-stone-500">Order Qty:</span>
+                              {isOos ? (
+                                <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
+                                  OOS (Limit: 0)
+                                </div>
+                              ) : qty === 0 ? (
                                 <button
                                   type="button"
                                   onClick={() => updateCart(item.item_zsku, 1, item)}
-                                  className={`px-4 py-2 rounded-xl text-xs font-black shadow-sm transition active:scale-95 ${
-                                    isOos
-                                      ? "bg-stone-200 text-stone-400 cursor-not-allowed"
-                                      : isNative
-                                        ? "bg-[#1864AB] hover:bg-[#13508A] text-white"
-                                        : "bg-[#6B0B20] hover:bg-[#520818] text-white"
+                                  className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm ${
+                                    isNative ? "bg-[#1864AB] text-white hover:bg-[#13508A]" : "bg-[#6B0B20] text-white hover:bg-[#520818]"
                                   }`}
                                 >
-                                  + Add
+                                  + ADD
                                 </button>
                               ) : (
                                 <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
@@ -789,23 +915,20 @@ export default function BaristaPortal() {
                               )}
 
                               <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
-                                <div className="text-xs font-black text-stone-700">
-                                  {qty > 0 ? `${qty} units ordered` : "0 in order"}
-                                </div>
-
-                                {qty === 0 ? (
+                                <span className="text-xs font-bold text-stone-500">Order Qty:</span>
+                                {isOos ? (
+                                  <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
+                                    OOS (Limit: 0)
+                                  </div>
+                                ) : qty === 0 ? (
                                   <button
                                     type="button"
                                     onClick={() => updateCart(item.item_zsku, 1, item)}
-                                    className={`px-4 py-2 rounded-xl text-xs font-black shadow-sm transition active:scale-95 ${
-                                      isOos
-                                        ? "bg-stone-200 text-stone-400 cursor-not-allowed"
-                                        : isNative
-                                          ? "bg-[#1864AB] hover:bg-[#13508A] text-white"
-                                          : "bg-[#6B0B20] hover:bg-[#520818] text-white"
+                                    className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm ${
+                                      isNative ? "bg-[#1864AB] text-white hover:bg-[#13508A]" : "bg-[#6B0B20] text-white hover:bg-[#520818]"
                                     }`}
                                   >
-                                    + Add
+                                    + ADD
                                   </button>
                                 ) : (
                                   <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
@@ -836,45 +959,44 @@ export default function BaristaPortal() {
         </div>
       </main>
 
-      {/* FLOATING BOTTOM BAR */}
+      {/* FLOATING BOTTOM ORDER BAR */}
       {totalUnits > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur border-t border-stone-200 shadow-2xl z-30">
-          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-bold text-stone-500">Total Items in Cart</div>
-              <div className="text-lg font-black text-stone-900">{totalUnits} Units ({totalSkus} SKUs)</div>
+        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-white border-t border-stone-200 shadow-2xl">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
+            <div className="space-y-0.5">
+              <div className="flex items-center space-x-2">
+                <span className="bg-[#FFF000] text-black font-black text-[11px] px-2 py-0.5 rounded-md">{totalUnits} Units</span>
+                <span className="text-xs font-bold text-stone-700">({totalSkus} SKUs)</span>
+              </div>
+              <div className="text-xs font-black text-stone-900 truncate">Store: {selectedStore?.ds_name}</div>
             </div>
 
-            <div className="flex items-center space-x-3">
-              <button
-                type="button"
-                onClick={() => setIsOrderSummaryOpen(true)}
-                className="bg-stone-100 hover:bg-stone-200 text-stone-800 px-4 py-3 rounded-2xl font-black text-xs transition"
-              >
-                Review Items 📋
+            <div className="flex items-center space-x-2">
+              <button type="button" onClick={() => setIsOrderSummaryOpen(true)} className="bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-black px-3.5 py-3 rounded-2xl">
+                View Cart
               </button>
               <button
                 type="button"
                 onClick={submitOrder}
                 disabled={isSubmitting}
-                className={`px-6 py-3 rounded-2xl font-black text-sm shadow-md transition text-white active:scale-95 ${
+                className={`px-6 py-3 rounded-2xl font-black text-sm shadow-lg disabled:opacity-50 text-white ${
                   isNative ? "bg-[#1864AB] hover:bg-[#13508A]" : "bg-[#6B0B20] hover:bg-[#520818]"
                 }`}
               >
-                {isSubmitting ? "Submitting..." : "Submit Replenishment Order →"}
+                {isSubmitting ? "Submitting..." : "Submit Order →"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* REVIEW ORDER MODAL */}
+      {/* ORDER REVIEW MODAL */}
       {isOrderSummaryOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-xl p-6 max-h-[85vh] flex flex-col space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b pb-3">
               <div>
-                <h3 className="font-black text-lg text-stone-900">Review Replenishment Order</h3>
+                <h3 className="text-lg font-black text-stone-900">Review Replenishment Order</h3>
                 <p className="text-xs text-stone-500">{selectedStore?.ds_name} ({selectedStore?.ds_code}) • {selectedStore?.store_type}</p>
               </div>
               <button onClick={() => setIsOrderSummaryOpen(false)} className="w-8 h-8 rounded-full bg-stone-100 font-bold flex items-center justify-center">✕</button>
