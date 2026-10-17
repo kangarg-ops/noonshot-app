@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 
 export default function AdminPortal() {
-  const [cutoffTime, setCutoffTime] = useState("19:00");
+  const [cutoffTime, setCutoffTime] = useState("18:30");
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   // Auth / Admin protection
@@ -11,7 +11,7 @@ export default function AdminPortal() {
   const [authChecked, setAuthChecked] = useState(false);
   const [loginEmailInput, setLoginEmailInput] = useState("");
   const [newAdminEmail, setNewAdminEmail] = useState("");
-  const [timeZoneDisplay, setTimeZoneDisplay] = useState("IST (Indian Standard Time)");
+  const [timeZoneDisplay, setTimeZoneDisplay] = useState("GST (Gulf Standard Time - UAE)");
 
   // Store form states
   const [storeName, setStoreName] = useState("");
@@ -78,7 +78,7 @@ export default function AdminPortal() {
         setTimeZoneDisplay(`${short} (${tz})`);
       }
     } catch (e) {
-      setTimeZoneDisplay("IST (Indian Standard Time)");
+      setTimeZoneDisplay("GST (Gulf Standard Time - UAE)");
     }
     loadData();
     setAuthChecked(true);
@@ -183,6 +183,24 @@ export default function AdminPortal() {
       }
     } catch (e) {
       alert("Error adding store");
+    }
+  };
+
+  const toggleStoreBrand = async (ds_code: string, currentType: string) => {
+    const newType = currentType === "NATIVE" ? "SHOT" : "NATIVE";
+    try {
+      const res = await fetch("/api/stores", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ds_code, store_type: newType }),
+      });
+      if (res.ok) {
+        loadData();
+      } else {
+        alert("Failed to update store brand.");
+      }
+    } catch (e) {
+      alert("Error updating store brand.");
     }
   };
 
@@ -626,7 +644,7 @@ export default function AdminPortal() {
               </span>
             </div>
             <p className="text-[11px] text-stone-500 mt-1.5">
-              Cutoff is strictly locked to <strong>{timeZoneDisplay}</strong>. Example: 19:00 IST = 17:30 GST (UAE Cafe Time).
+              Cutoff is strictly locked to <strong>{timeZoneDisplay}</strong>. Example: 18:30 GST (UAE Cafe Time).
             </p>
           </div>
           <button onClick={saveSettings} className="bg-stone-900 hover:bg-black text-white px-6 py-2.5 rounded-xl font-black text-sm transition self-start sm:self-auto shadow-sm">
@@ -749,15 +767,39 @@ export default function AdminPortal() {
             <div key={s.ds_code} className="border p-3 rounded-lg bg-gray-50 flex justify-between items-center text-sm shadow-sm">
               <div className="min-w-0 pr-2">
                 <div className="font-bold text-gray-900 truncate">{s.ds_name}</div>
-                <div className="text-xs text-gray-500 font-mono font-bold">{s.ds_code} • <span className={s.store_type === 'NATIVE' ? 'text-blue-700' : 'text-red-700'}>{s.store_type}</span></div>
-                <div className="text-[11px] text-gray-400 truncate">{s.email || "No email assigned"}</div>
+                <div className="text-xs text-gray-500 font-mono font-bold flex items-center space-x-1 mt-0.5">
+                  <span>{s.ds_code}</span>
+                  <span>•</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                    s.store_type === 'NATIVE' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {s.store_type || 'SHOT'}
+                  </span>
+                </div>
+                <div className="text-[11px] text-gray-400 truncate mt-0.5">{s.email || "No email assigned"}</div>
               </div>
-              <button
-                onClick={() => removeStore(s.ds_code, s.ds_name)}
-                className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded hover:bg-red-50 flex-shrink-0"
-              >
-                ✕
-              </button>
+              <div className="flex items-center space-x-1.5 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => toggleStoreBrand(s.ds_code, s.store_type || 'SHOT')}
+                  className={`text-[11px] font-bold px-2 py-1 rounded border transition ${
+                    s.store_type === 'NATIVE'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                      : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                  }`}
+                  title="Click to toggle store between SHOT and NATIVE"
+                >
+                  ⇄ {s.store_type === 'NATIVE' ? 'To SHOT' : 'To NATIVE'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeStore(s.ds_code, s.ds_name)}
+                  className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded hover:bg-red-50"
+                  title="Delete store"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
           ))}
         </div>
