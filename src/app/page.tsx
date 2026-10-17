@@ -32,6 +32,7 @@ export default function BaristaPortal() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSection, setSelectedSection] = useState<string>("ALL");
   const [isOrderSummaryOpen, setIsOrderSummaryOpen] = useState(false);
+  const [isSopOpen, setIsSopOpen] = useState(false);
 
   useEffect(() => {
     if (resendCountdown <= 0) return;
@@ -227,6 +228,10 @@ export default function BaristaPortal() {
   };
 
   const updateCart = (zsku: string, qty: number, item?: any) => {
+    if (isSupervisor) {
+      alert("👀 Supervisor accounts have View-Only inspection permissions. Ordering is disabled.");
+      return;
+    }
     const it = item || items.find(i => i.item_zsku === zsku);
     const limit = it ? getItemEffectiveLimit(it) : null;
     const finalQty = Math.max(0, isNaN(qty) ? 0 : qty);
@@ -251,6 +256,10 @@ export default function BaristaPortal() {
   };
 
   const submitOrder = async () => {
+    if (isSupervisor) {
+      alert("👀 Supervisor accounts have View-Only inspection permissions. Ordering is disabled.");
+      return;
+    }
     if (!selectedStore) return;
     const email = userEmail.trim().toLowerCase();
     const matched = stores.find(s => matchStoreByEmail(s, email));
@@ -549,7 +558,7 @@ export default function BaristaPortal() {
                   <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
                     <div className="text-[10px] font-black uppercase text-amber-700">Verified Supervisor:</div>
                     <div className="font-black text-stone-900 text-sm">{detectedSupervisor}</div>
-                    <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration & Testing Responses</span> • Login Duration: <strong>30 Days (1 Month)</strong></div>
+                    <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration (View-Only Mode)</span> • Login Duration: <strong>30 Days (1 Month)</strong></div>
                   </div>
                 )}
               </div>
@@ -624,7 +633,14 @@ export default function BaristaPortal() {
           )}
 
           <div className="pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
-            <span>🔒 Store Replenishment System</span>
+            <button
+              type="button"
+              onClick={() => setIsSopOpen(true)}
+              className="font-bold text-[#1864AB] hover:underline flex items-center space-x-1"
+            >
+              <span>📖</span>
+              <span>Barista SOP</span>
+            </button>
             <a href="/admin" className="font-bold text-stone-800 hover:text-[#1864AB]">Admin Dashboard ⚙️</a>
           </div>
         </div>
@@ -648,6 +664,14 @@ export default function BaristaPortal() {
             </div>
 
             <div className="flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => setIsSopOpen(true)}
+                className="bg-white/20 hover:bg-white/30 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl border border-white/20 flex items-center space-x-1 shadow-sm"
+              >
+                <span>📖</span>
+                <span>Barista SOP</span>
+              </button>
               {isAdminMode && (
                 <a href="/admin" className="bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-2.5 py-1.5 rounded-xl shadow">
                   ⚙️ Admin
@@ -664,7 +688,7 @@ export default function BaristaPortal() {
               <span className="bg-white/20 px-2 py-0.5 rounded-md font-black text-[10px] uppercase">{isNative ? "NATIVE STORE" : "SHOT STORE"}</span>
               <span className="font-extrabold text-sm truncate">📍 {selectedStore?.ds_name} ({selectedStore?.ds_code})</span>
               {!isAdminMode && !isSupervisor && <span className="bg-white/15 text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20">🔒 Locked</span>}
-              {isSupervisor && <span className="bg-amber-300 text-stone-900 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">👁️ {supervisorTitle} (Testing Mode)</span>}
+              {isSupervisor && <span className="bg-amber-300 text-stone-900 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">👁️ {supervisorTitle} (View-Only Mode)</span>}
             </div>
 
             {(isAdminMode || isSupervisor) && stores.length > 0 && (
@@ -831,7 +855,11 @@ export default function BaristaPortal() {
 
                             <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
                               <span className="text-xs font-bold text-stone-500">Order Qty:</span>
-                              {isOos ? (
+                              {isSupervisor ? (
+                                <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-amber-50 text-amber-800 border border-amber-200">
+                                  👁️ View Only
+                                </div>
+                              ) : isOos ? (
                                 <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
                                   OOS (Limit: 0)
                                 </div>
@@ -916,7 +944,11 @@ export default function BaristaPortal() {
 
                               <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
                                 <span className="text-xs font-bold text-stone-500">Order Qty:</span>
-                                {isOos ? (
+                                {isSupervisor ? (
+                                  <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-amber-50 text-amber-800 border border-amber-200">
+                                    👁️ View Only
+                                  </div>
+                                ) : isOos ? (
                                   <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
                                     OOS (Limit: 0)
                                   </div>
@@ -960,7 +992,7 @@ export default function BaristaPortal() {
       </main>
 
       {/* FLOATING BOTTOM ORDER BAR */}
-      {totalUnits > 0 && (
+      {totalUnits > 0 && !isSupervisor && (
         <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-white border-t border-stone-200 shadow-2xl">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
             <div className="space-y-0.5">
@@ -1040,6 +1072,138 @@ export default function BaristaPortal() {
               >
                 {isSubmitting ? "Submitting Order..." : `Confirm & Place Order (${totalUnits} Units)`}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SOP TRAINING MODAL */}
+      {isSopOpen && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-stone-200">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-[#1864AB] via-[#0E4A86] to-[#6B0B20] text-white p-5 sm:p-6 flex items-center justify-between shrink-0">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className="bg-[#FFF000] text-black text-[10px] font-black px-2 py-0.5 rounded uppercase">SOP Guide</span>
+                  <span className="text-xs text-blue-200 font-bold">Official UAE Cafe Standard</span>
+                </div>
+                <h3 className="text-lg sm:text-2xl font-black">☕ Barista Portal SOP & Training Guide</h3>
+                <p className="text-xs text-blue-100">Step-by-step instructions for daily stock replenishment & recipe compliance.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSopOpen(false)}
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold flex items-center justify-center text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 text-stone-800 text-xs sm:text-sm">
+              {/* Timeline Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl space-y-1">
+                  <div className="text-[11px] font-black text-blue-800 uppercase">Step 1: Store Login</div>
+                  <div className="text-xs text-stone-700">Enter <code className="bg-white px-1 py-0.5 rounded text-[11px]">cafe-*@noon.com</code> and verify via 6-digit email OTP.</div>
+                  <div className="text-[10px] text-emerald-700 font-bold">🔒 Logged in for 7 days</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl space-y-1">
+                  <div className="text-[11px] font-black text-blue-800 uppercase">Step 2: Check Store</div>
+                  <div className="text-xs text-stone-700">Verify your Store Name, DS Code, and Brand (NATIVE vs SHOT).</div>
+                  <div className="text-[10px] text-blue-700 font-bold">📍 Locked to your branch</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl space-y-1">
+                  <div className="text-[11px] font-black text-blue-800 uppercase">Step 3: Browse Items</div>
+                  <div className="text-xs text-stone-700">Filter by category (Beans, Milks, Ingredients, Packaging) or search.</div>
+                  <div className="text-[10px] text-purple-700 font-bold">🔍 Instant search bar</div>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl space-y-1">
+                  <div className="text-[11px] font-black text-amber-800 uppercase">Step 4: Subko Limit</div>
+                  <div className="text-xs text-stone-700">SUBKO Native & Niche Specialty Beans: maximum <strong>1 bag / day</strong> per store.</div>
+                  <div className="text-[10px] text-amber-800 font-bold">⚖️ Automatic system limit</div>
+                </div>
+                <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-2xl space-y-1">
+                  <div className="text-[11px] font-black text-rose-800 uppercase">Step 5: Out of Stock</div>
+                  <div className="text-xs text-stone-700">OOS / Limit 0 items cannot be ordered. Backup items routed automatically.</div>
+                  <div className="text-[10px] text-rose-700 font-bold">🚫 Gray button: OOS (Limit: 0)</div>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl space-y-1">
+                  <div className="text-[11px] font-black text-emerald-800 uppercase">Step 6: Submit Order</div>
+                  <div className="text-xs text-stone-700">Submit before <strong>7:00 PM</strong> for next-morning delivery.</div>
+                  <div className="text-[10px] text-emerald-700 font-bold">⏰ Strict 7:00 PM Cut-off</div>
+                </div>
+              </div>
+
+              {/* Brand Comparison */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-sky-50 border border-sky-200 p-4 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="bg-[#1864AB] text-white text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase">NATIVE CAFE</span>
+                    <span className="text-xs font-bold text-sky-800">SUBKO Specialty Collab</span>
+                  </div>
+                  <p className="text-xs text-stone-600">
+                    Dedicated craft menu using SUBKO beans (Native & Niche), decaf Colombian beans, and official NATIVE branded packaging (cups, lids, sugars).
+                  </p>
+                </div>
+                <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="bg-[#6B0B20] text-white text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase">SHOT CAFE</span>
+                    <span className="text-xs font-bold text-rose-800">Express Barista Concept</span>
+                  </div>
+                  <p className="text-xs text-stone-600">
+                    High-volume 15-minute dispatch using 3 signature roasts (Noon Minutes, Ethiopian Medium, Decaf), syrups, and SHOT branded supplies.
+                  </p>
+                </div>
+              </div>
+
+              {/* Do's & Don'ts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-emerald-50/70 border border-emerald-200 p-4 rounded-2xl space-y-2">
+                  <div className="text-emerald-900 font-black text-xs uppercase flex items-center gap-1.5">
+                    <span>✅</span> Barista Best Practices
+                  </div>
+                  <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
+                    <li>Count physically on-hand stock before ordering.</li>
+                    <li>Submit daily orders between <strong>4:00 PM and 6:30 PM</strong>.</li>
+                    <li>Keep a 2-day buffer for packaging and cups.</li>
+                    <li>If shift updates an order, the system automatically takes the highest quantity.</li>
+                  </ul>
+                </div>
+                <div className="bg-rose-50/70 border border-rose-200 p-4 rounded-2xl space-y-2">
+                  <div className="text-rose-900 font-black text-xs uppercase flex items-center gap-1.5">
+                    <span>❌</span> Important Restrictions
+                  </div>
+                  <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
+                    <li>Never attempt to log in using another store's email.</li>
+                    <li>Do not submit orders after 7:00 PM expecting next-day delivery.</li>
+                    <li>Never share login OTP codes outside the store team.</li>
+                    <li>Do not order more than 1 unit of Subko specialty beans per day.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-stone-50 p-4 border-t border-stone-200 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-stone-500 font-medium">noon Speciality Coffee Operations • UAE Cafes</span>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="bg-white border border-stone-300 hover:bg-stone-100 text-stone-800 font-bold text-xs px-3 py-2 rounded-xl"
+                >
+                  🖨️ Print SOP Sheet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsSopOpen(false)}
+                  className="bg-stone-900 hover:bg-black text-white font-bold text-xs px-4 py-2 rounded-xl"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
