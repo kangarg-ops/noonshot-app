@@ -42,13 +42,13 @@ async function isEmailAuthorized(email: string): Promise<boolean> {
 
   // Check Store emails
   try {
-    const stores = await prisma.store.findMany({
-      where: { isActive: true },
-      select: { email: true }
-    });
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "email" TEXT;`);
+    const stores: any[] = await prisma.$queryRawUnsafe(
+      `SELECT email FROM "Store" WHERE "isActive" = true AND email IS NOT NULL`
+    );
     for (const s of stores) {
       if (!s.email) continue;
-      const emails = s.email.toLowerCase().split(/[,;\s]+/).map(e => e.trim()).filter(Boolean);
+      const emails = s.email.toLowerCase().split(/[,;\s]+/).map((e: string) => e.trim()).filter(Boolean);
       if (emails.includes(cleanEmail)) return true;
     }
   } catch (e) {
@@ -196,7 +196,7 @@ export async function POST(req: Request) {
       }
 
       // Admins & Supervisors: 30 days (1 month)
-      // Stores: 7 days (1 week)
+      // Store baristas: 7 days (1 week)
       const isLongSession = isAdmin || isSupervisor;
       const durationDays = isLongSession ? 30 : 7;
       const expiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
