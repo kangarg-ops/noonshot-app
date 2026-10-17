@@ -1167,7 +1167,7 @@ export default function BaristaPortal() {
                   <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
                     <li>Count physically on-hand stock before ordering.</li>
                     <li>You can submit orders <strong>anytime during the day as per UAE time</strong> (cut-off: <strong>6:30 PM UAE Time</strong>).</li>
-                    <li>Keep a 2-day buffer for packaging and cups.</li>
+                    <li>Keep a 4-day buffer for packaging and cups.</li>
                     <li>If shift updates an order, the system automatically takes the highest quantity.</li>
                   </ul>
                 </div>
