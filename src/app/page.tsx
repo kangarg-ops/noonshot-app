@@ -341,7 +341,7 @@ export default function BaristaPortal() {
       );
     };
 
-        const isMilk = (i: any) => {
+    const isMilk = (i: any) => {
       if (isIsiCharger(i)) return false;
       const t = (i.product_title || "").toLowerCase();
       const b = (i.brand || "").toLowerCase();
@@ -375,17 +375,25 @@ export default function BaristaPortal() {
       );
     };
 
-    const isDecaf = (i: any) => (i.product_title || "").toLowerCase().includes("decaf");
-
-    const isUnbranded = (i: any) => {
+    const isBean = (i: any) => {
       if (isIsiCharger(i)) return false;
-      if (isBean(i) || isSubkoBean(i) || isMilk(i)) return false;
-      const cat = (i.category || "").toUpperCase();
-      if (cat === "COFFEE_BEANS" || cat === "INGREDIENTS" || cat === "MILK") return false;
       const t = (i.product_title || "").toLowerCase();
-      const b = (i.barcode || "").toUpperCase();
-      return t.includes("unbranded") || b.startsWith("UBNAT");
+      const cat = (i.category || "").toUpperCase();
+      const b = (i.brand || "").toLowerCase();
+      if (t.includes("cleaning") || t.includes("clean") || t.includes("cup") || t.includes("lid") || t.includes("straw") || t.includes("syrup") || t.includes("sauce")) return false;
+      return (
+        cat === "COFFEE_BEANS" ||
+        isSubkoBean(i) ||
+        b.includes("subko") ||
+        t.includes("subko") ||
+        t.includes("blend") ||
+        t.includes("roast") ||
+        t.includes("decaf") ||
+        t.includes("coffee bean")
+      );
     };
+
+    const isDecaf = (i: any) => (i.product_title || "").toLowerCase().includes("decaf");
 
     const isNativeBranded = (i: any) => {
       if (isIsiCharger(i)) return false;
