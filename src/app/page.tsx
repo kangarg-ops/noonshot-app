@@ -393,7 +393,17 @@ export default function BaristaPortal() {
       );
     };
 
-    const isDecaf = (i: any) => (i.product_title || "").toLowerCase().includes("decaf");
+        const isDecaf = (i: any) => (i.product_title || "").toLowerCase().includes("decaf");
+
+    const isUnbranded = (i: any) => {
+      if (isIsiCharger(i)) return false;
+      if (isBean(i) || isSubkoBean(i) || isMilk(i)) return false;
+      const cat = (i.category || "").toUpperCase();
+      if (cat === "COFFEE_BEANS" || cat === "INGREDIENTS" || cat === "MILK") return false;
+      const t = (i.product_title || "").toLowerCase();
+      const b = (i.barcode || "").toUpperCase();
+      return t.includes("unbranded") || b.startsWith("UBNAT");
+    };
 
     const isNativeBranded = (i: any) => {
       if (isIsiCharger(i)) return false;
