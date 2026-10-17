@@ -1131,8 +1131,8 @@ export default function BaristaPortal() {
                 </div>
                 <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-2xl space-y-1">
                   <div className="text-[11px] font-black text-emerald-800 uppercase">Step 6: Submit Order</div>
-                  <div className="text-xs text-stone-700">Submit before <strong>7:00 PM</strong> for next-morning delivery.</div>
-                  <div className="text-[10px] text-emerald-700 font-bold">⏰ Strict 7:00 PM Cut-off</div>
+                  <div className="text-xs text-stone-700">Submit anytime. Orders placed before <strong>6:30 PM UAE Time</strong> are dispatched next morning.</div>
+                  <div className="text-[10px] text-emerald-700 font-bold">⏰ Strict 6:30 PM UAE Cut-off</div>
                 </div>
               </div>
 
@@ -1166,7 +1166,7 @@ export default function BaristaPortal() {
                   </div>
                   <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
                     <li>Count physically on-hand stock before ordering.</li>
-                    <li>Submit daily orders between <strong>4:00 PM and 6:30 PM</strong>.</li>
+                    <li>You can submit orders <strong>anytime during the day as per UAE time</strong> (cut-off: <strong>6:30 PM UAE Time</strong>).</li>
                     <li>Keep a 2-day buffer for packaging and cups.</li>
                     <li>If shift updates an order, the system automatically takes the highest quantity.</li>
                   </ul>
@@ -1177,7 +1177,7 @@ export default function BaristaPortal() {
                   </div>
                   <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
                     <li>Never attempt to log in using another store's email.</li>
-                    <li>Do not submit orders after 7:00 PM expecting next-day delivery.</li>
+                    <li>Orders placed after 6:30 PM UAE time will automatically be considered for next-day processing only.</li>
                     <li>Never share login OTP codes outside the store team.</li>
                     <li>Do not order more than 1 unit of Subko specialty beans per day.</li>
                   </ul>
