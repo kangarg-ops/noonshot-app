@@ -341,32 +341,37 @@ export default function BaristaPortal() {
       );
     };
 
-    const isMilk = (i: any) => {
+        const isMilk = (i: any) => {
       if (isIsiCharger(i)) return false;
       const t = (i.product_title || "").toLowerCase();
+      const b = (i.brand || "").toLowerCase();
+      const cat = (i.category || "").toUpperCase();
+
+      // Exclude cleaning chemicals, tablets, powders, syrups, sauces, and creams (except milk)
       if (
         t.includes("clean") || t.includes("everclean") || t.includes("ball") ||
-        t.includes("liquid") || t.includes("cream") || t.includes("tablet") ||
-        t.includes("descal") || t.includes("powder") || t.includes("syrup") || t.includes("sauce")
+        t.includes("liquid") || t.includes("tablet") || t.includes("descal") ||
+        t.includes("powder") || t.includes("syrup") || t.includes("sauce")
       ) return false;
-      return t.includes("milk") || t.includes("oat") || t.includes("almond") || t.includes("dairy") || t.includes("soy");
-    };
+      if (t.includes("cream") && !t.includes("milk")) return false;
 
-    const isBean = (i: any) => {
-      if (isIsiCharger(i)) return false;
-      const t = (i.product_title || "").toLowerCase();
-      const cat = (i.category || "").toUpperCase();
-      const b = (i.brand || "").toLowerCase();
-      if (t.includes("cleaning") || t.includes("clean") || t.includes("cup") || t.includes("lid") || t.includes("straw") || t.includes("syrup") || t.includes("sauce")) return false;
+      // 1. Explicit Barista Milk Brands & Lines
+      if (b.includes("oatly") || t.includes("oatly")) return true;
+      if (b.includes("tres_maria") || t.includes("tres maria")) return true;
+      if (b.includes("alpro") || t.includes("alpro")) {
+        if (
+          t.includes("almond") || t.includes("coconut") || t.includes("oat") ||
+          t.includes("soya") || t.includes("soy") || t.includes("barista") || t.includes("milk")
+        ) return true;
+      }
+
+      // 2. Barista milk keywords & category
+      if (t.includes("barista coconut") || t.includes("coconut milk")) return true;
+      if (cat === "MILK") return true;
+
       return (
-        cat === "COFFEE_BEANS" ||
-        isSubkoBean(i) ||
-        b.includes("subko") ||
-        t.includes("subko") ||
-        t.includes("blend") ||
-        t.includes("roast") ||
-        t.includes("decaf") ||
-        t.includes("coffee bean")
+        t.includes("milk") || t.includes("oat") || t.includes("almond") ||
+        t.includes("dairy") || t.includes("soy")
       );
     };
 
