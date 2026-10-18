@@ -195,10 +195,8 @@ export async function POST(req: Request) {
         } catch (e) {}
       }
 
-      // Admins & Supervisors: 30 days (1 month)
-      // Store baristas: 7 days (1 week)
-      const isLongSession = isAdmin || isSupervisor;
-      const durationDays = isLongSession ? 30 : 7;
+            // Session duration: 30 days (1 month) for all authenticated accounts
+      const durationDays = 30;
       const expiresAt = Date.now() + durationDays * 24 * 60 * 60 * 1000;
 
       return NextResponse.json({
