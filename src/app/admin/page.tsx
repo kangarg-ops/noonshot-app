@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 
 export default function AdminPortal() {
-  const [cutoffTime, setCutoffTime] = useState("18:30");
+  const [cutoffTime, setCutoffTime] = useState("19:00");
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().split("T")[0]);
 
   // Auth / Admin protection
@@ -11,7 +11,7 @@ export default function AdminPortal() {
   const [authChecked, setAuthChecked] = useState(false);
   const [loginEmailInput, setLoginEmailInput] = useState("");
   const [newAdminEmail, setNewAdminEmail] = useState("");
-  const [timeZoneDisplay, setTimeZoneDisplay] = useState("GST (Gulf Standard Time - UAE)");
+  const [timeZoneDisplay, setTimeZoneDisplay] = useState("IST (Indian Standard Time)");
 
   // Store form states
   const [storeName, setStoreName] = useState("");
@@ -27,7 +27,6 @@ export default function AdminPortal() {
   const [itemBrand, setItemBrand] = useState("");
   const [itemUnitSize, setItemUnitSize] = useState("");
   const [itemUnitType, setItemUnitType] = useState("ml");
-  const [itemImage, setItemImage] = useState("");
   const [itemSub, setItemSub] = useState("");
   const [itemType, setItemType] = useState("GENERAL");
   const [itemCategory, setItemCategory] = useState("INGREDIENTS");
@@ -77,39 +76,44 @@ export default function AdminPortal() {
         const short = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2] || tz;
         setTimeZoneDisplay(`${short} (${tz})`);
       }
-    } catch (e) {
-      setTimeZoneDisplay("GST (Gulf Standard Time - UAE)");
-    }
+    } catch (e) {}
     loadData();
     setAuthChecked(true);
   }, []);
 
+  const isSuperAdmin = currentUserEmail === "kangarg@noon.com";
+  const isAdmin = isSuperAdmin || adminList.includes(currentUserEmail);
+
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    const email = loginEmailInput.trim().toLowerCase();
-    if (!email.endsWith("@noon.com")) {
-      alert("Please use a valid @noon.com email.");
+    const clean = loginEmailInput.trim().toLowerCase();
+    if (!clean.endsWith("@noon.com")) {
+      alert("Please enter a valid @noon.com email");
       return;
     }
-    localStorage.setItem("noon_user_email", email);
-    setCurrentUserEmail(email);
+    if (clean === "kangarg@noon.com" || adminList.includes(clean)) {
+      localStorage.setItem("noon_user_email", clean);
+      setCurrentUserEmail(clean);
+    } else {
+      alert(`Access Denied: ${clean} is not an authorized Admin. Contact kangarg@noon.com for access.`);
+    }
   };
 
   const addAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const email = newAdminEmail.trim().toLowerCase();
-    if (!email.endsWith("@noon.com")) {
-      alert("Must be a valid @noon.com email.");
+    const clean = newAdminEmail.trim().toLowerCase();
+    if (!clean.endsWith("@noon.com")) {
+      alert("Must be an @noon.com email");
       return;
     }
     try {
       const res = await fetch("/api/admins", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: clean }),
       });
       if (res.ok) {
-        alert(`Admin access granted to ${email}`);
+        alert(`Admin ${clean} added!`);
         setNewAdminEmail("");
         loadAdmins();
       } else {
@@ -122,40 +126,32 @@ export default function AdminPortal() {
   };
 
   const removeAdmin = async (email: string) => {
-    if (!confirm(`Are you sure you want to revoke admin access for ${email}?`)) return;
+    if (!confirm(`Revoke admin access for ${email}?`)) return;
     try {
-      const res = await fetch("/api/admins", {
+      const res = await fetch(`/api/admins?email=${encodeURIComponent(email)}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
       });
       if (res.ok) {
-        alert("Admin removed");
+        alert(`Admin ${email} removed`);
         loadAdmins();
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to remove admin");
       }
     } catch (e) {
       alert("Error removing admin");
     }
   };
 
-  const saveSettings = async () => {
+  const saveCutoff = async () => {
     try {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cutoffTime }),
       });
-      if (res.ok) alert("Settings saved!");
+      if (res.ok) alert("Cutoff time updated!");
+      else alert("Failed to update cutoff time");
     } catch (e) {
-      alert("Error saving settings");
+      alert("Error saving cutoff time");
     }
-  };
-
-  const downloadReport = (format: string = 'xlsx') => {
-    window.open(`/api/report?date=${reportDate}&format=${format}`, "_blank");
   };
 
   const addStore = async (e: React.FormEvent) => {
@@ -165,17 +161,18 @@ export default function AdminPortal() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ds_code: storeCode.trim().toUpperCase(),
           ds_name: storeName.trim(),
-          email: storeEmail.trim().toLowerCase(),
+          ds_code: storeCode.trim().toUpperCase(),
+          email: storeEmail.trim(),
           store_type: storeType
         }),
       });
       if (res.ok) {
         alert("Store added!");
-        setStoreCode("");
         setStoreName("");
+        setStoreCode("");
         setStoreEmail("");
+        setStoreType("SHOT");
         loadData();
       } else {
         const err = await res.json();
@@ -186,61 +183,50 @@ export default function AdminPortal() {
     }
   };
 
-  const toggleStoreBrand = async (ds_code: string, currentType: string) => {
-    const newType = currentType === "NATIVE" ? "SHOT" : "NATIVE";
-    try {
-      const res = await fetch("/api/stores", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ds_code, store_type: newType }),
-      });
-      if (res.ok) {
-        loadData();
-      } else {
-        alert("Failed to update store brand.");
-      }
-    } catch (e) {
-      alert("Error updating store brand.");
-    }
-  };
-
   const removeStore = async (ds_code: string, ds_name: string) => {
-    if (!confirm(`Are you sure you want to delete store "${ds_name}" (${ds_code})?`)) return;
+    if (!confirm(`Are you sure you want to remove ${ds_name} (${ds_code})?`)) return;
     try {
-      const res = await fetch("/api/stores", {
+      const res = await fetch(`/api/stores?ds_code=${encodeURIComponent(ds_code)}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ds_code }),
       });
       if (res.ok) {
-        alert("Store deleted");
+        alert("Store removed!");
         loadData();
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to delete store");
+        alert(err.error || "Failed to remove store");
       }
     } catch (e) {
-      alert("Error deleting store");
+      alert("Error removing store");
     }
   };
 
-  const deleteAllStores = async () => {
-    if (!confirm("⚠️ DANGER: Are you sure you want to delete ALL stores? This cannot be undone.")) return;
+  const toggleStoreType = async (store: any) => {
+    const nextType = store.store_type === "NATIVE" ? "SHOT" : "NATIVE";
+    const promptMsg = `Swap store concept for "${store.ds_name}" (${store.ds_code})?\n\n` +
+      `Current: ${store.store_type}\n` +
+      `New: ${nextType}\n\n` +
+      `This will immediately isolate or grant access to ${nextType} catalog items for baristas at this location. Proceed?`;
+    
+    if (!confirm(promptMsg)) return;
+
     try {
       const res = await fetch("/api/stores", {
-        method: "DELETE",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ all: true }),
+        body: JSON.stringify({
+          ds_code: store.ds_code,
+          store_type: nextType,
+        }),
       });
       if (res.ok) {
-        alert("All stores deleted");
-        loadData();
+        setStores(prev => prev.map(s => s.ds_code === store.ds_code ? { ...s, store_type: nextType } : s));
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to delete stores");
+        alert(err.error || "Failed to swap store concept");
       }
     } catch (e) {
-      alert("Error deleting all stores");
+      alert("Network error swapping store concept");
     }
   };
 
@@ -257,7 +243,6 @@ export default function AdminPortal() {
           brand: itemBrand.trim() || null,
           unit_size: itemUnitSize.trim() || null,
           unit_type: itemUnitType,
-          imageUrl: itemImage.trim() || null,
           substitute_zsku: itemSub.trim() || null,
           item_type: itemType,
           category: itemCategory,
@@ -271,7 +256,6 @@ export default function AdminPortal() {
         setItemTitle("");
         setItemBrand("");
         setItemUnitSize("");
-        setItemImage("");
         setItemSub("");
         setItemMaxQty("");
         loadData();
@@ -284,17 +268,28 @@ export default function AdminPortal() {
     }
   };
 
-  const updateItemDetails = async (e: React.FormEvent) => {
+  const saveEditItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
     try {
       const res = await fetch("/api/items", {
-        method: "PUT",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingItem),
+        body: JSON.stringify({
+          item_zsku: editingItem.item_zsku,
+          pbarcode: editingItem.pbarcode || "",
+          product_title: editingItem.product_title,
+          brand: editingItem.brand || null,
+          unit_size: editingItem.unit_size || null,
+          unit_type: editingItem.unit_type || "ml",
+          substitute_zsku: editingItem.substitute_zsku || null,
+          item_type: editingItem.item_type || "GENERAL",
+          category: editingItem.category || "INGREDIENTS",
+          max_qty: editingItem.max_qty !== null && editingItem.max_qty !== undefined && editingItem.max_qty !== "" ? parseInt(editingItem.max_qty) : null
+        }),
       });
       if (res.ok) {
-        alert("Item updated!");
+        alert("SKU updated!");
         setEditingItem(null);
         loadData();
       } else {
@@ -306,148 +301,193 @@ export default function AdminPortal() {
     }
   };
 
-  const toggleStock = async (item_zsku: string, in_stock: boolean) => {
+  const removeItem = async (item_zsku: string, product_title: string) => {
+    if (!confirm(`Are you sure you want to remove ${product_title} (${item_zsku})?`)) return;
     try {
-      const res = await fetch("/api/items", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_zsku, in_stock: !in_stock }),
+      const res = await fetch(`/api/items?item_zsku=${encodeURIComponent(item_zsku)}`, {
+        method: "DELETE",
       });
-      if (res.ok) loadData();
+      if (res.ok) {
+        alert("Item removed!");
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to remove item");
+      }
     } catch (e) {
-      alert("Error updating stock");
+      alert("Error removing item");
     }
   };
 
-  const updateMaxQty = async (item_zsku: string, max_qty: string) => {
+  const toggleStock = async (item_zsku: string, currentStock: boolean) => {
     try {
-      const val = max_qty === "" ? null : parseInt(max_qty);
       const res = await fetch("/api/items", {
-        method: "PUT",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_zsku, max_qty: val }),
+        body: JSON.stringify({
+          item_zsku,
+          in_stock: !currentStock
+        }),
       });
-      if (res.ok) loadData();
+      if (res.ok) {
+        setItems(prev => prev.map(i => i.item_zsku === item_zsku ? { ...i, in_stock: !currentStock } : i));
+      } else {
+        alert("Failed to toggle stock status");
+      }
+    } catch (e) {
+      alert("Error toggling stock status");
+    }
+  };
+
+  const updateMaxQty = async (item_zsku: string, max_qty: number | null) => {
+    try {
+      const res = await fetch("/api/items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item_zsku,
+          max_qty
+        }),
+      });
+      if (res.ok) {
+        setItems(prev => prev.map(i => i.item_zsku === item_zsku ? { ...i, max_qty } : i));
+      } else {
+        alert("Failed to update max qty");
+      }
     } catch (e) {
       alert("Error updating max qty");
     }
   };
 
-  const removeItem = async (item_zsku: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete SKU "${title}" (${item_zsku})?`)) return;
+  const downloadReport = async () => {
     try {
-      const res = await fetch("/api/items", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ item_zsku }),
-      });
-      if (res.ok) {
-        alert("Item deleted");
-        loadData();
-      } else {
+      const res = await fetch(`/api/reports?date=${reportDate}`);
+      if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to delete item");
+        alert(err.error || "Failed to download report");
+        return;
       }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Replenishment_Master_${reportDate}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } catch (e) {
-      alert("Error deleting item");
+      alert("Error generating report");
     }
   };
 
   if (!authChecked) {
-    return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500 font-bold">Checking admin permissions...</div>;
+    return <div className="p-8 text-center text-sm font-bold text-gray-500">Checking Authorization...</div>;
   }
 
-  const isGlobalAdmin = currentUserEmail === "kangarg@noon.com" || adminList.includes(currentUserEmail);
-
-  if (!currentUserEmail || !isGlobalAdmin) {
+  if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-        <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full space-y-4">
-          <div className="text-center space-y-1">
-            <h1 className="text-2xl font-bold text-gray-900">Admin Sign In</h1>
-            <p className="text-xs text-gray-500">noon Coffee Ops Admin Control Panel</p>
-          </div>
-          <form onSubmit={handleAdminLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">Your @noon.com Email</label>
-              <input
-                type="email"
-                placeholder="name@noon.com"
-                required
-                value={loginEmailInput}
-                onChange={(e) => setLoginEmailInput(e.target.value)}
-                className="w-full border p-2.5 rounded-lg text-sm bg-gray-50 focus:bg-white"
-              />
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100 sm:px-10 space-y-6">
+            <div className="text-center space-y-2">
+              <span className="text-3xl">🔒</span>
+              <h2 className="text-xl font-black text-gray-900 tracking-tight">Admin Authentication Required</h2>
+              <p className="text-xs text-gray-500">Sign in with an authorized @noon.com admin address.</p>
             </div>
-            {currentUserEmail && !isGlobalAdmin && (
-              <div className="bg-red-50 text-red-700 p-2.5 rounded-lg text-xs font-medium border border-red-200">
-                ⚠️ Account <strong>{currentUserEmail}</strong> does not have Admin privileges.
+
+            <form onSubmit={handleAdminLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Official @noon.com Email</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="yourname@noon.com"
+                  value={loginEmailInput}
+                  onChange={e => setLoginEmailInput(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-black focus:outline-none"
+                />
               </div>
-            )}
-            <button type="submit" className="w-full bg-black hover:bg-gray-800 text-white font-bold py-2.5 rounded-lg text-sm transition">
-              Verify & Enter Admin Portal →
-            </button>
-          </form>
-          <div className="text-center pt-2">
-            <a href="/" className="text-xs font-bold text-gray-500 hover:text-black">← Back to Barista Portal</a>
+              <button
+                type="submit"
+                className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition"
+              >
+                Access Admin Portal →
+              </button>
+            </form>
+
+            <div className="pt-2 border-t border-gray-100 text-center">
+              <a href="/" className="text-xs font-semibold text-blue-600 hover:underline">← Back to Barista Portal</a>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  const filteredStores = stores.filter(s => 
-    s.ds_name.toLowerCase().includes(storeSearch.toLowerCase()) || 
-    s.ds_code.toLowerCase().includes(storeSearch.toLowerCase()) ||
-    (s.email && s.email.toLowerCase().includes(storeSearch.toLowerCase()))
+  const filteredStores = stores.filter(s =>
+    (s.ds_name || "").toLowerCase().includes(storeSearch.toLowerCase()) ||
+    (s.ds_code || "").toLowerCase().includes(storeSearch.toLowerCase()) ||
+    (s.email || "").toLowerCase().includes(storeSearch.toLowerCase())
   );
 
   const filteredItems = items.filter(i =>
-    i.product_title.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    i.item_zsku.toLowerCase().includes(itemSearch.toLowerCase()) ||
-    (i.pbarcode && i.pbarcode.toLowerCase().includes(itemSearch.toLowerCase())) ||
-    (i.brand && i.brand.toLowerCase().includes(itemSearch.toLowerCase()))
+    (i.product_title || "").toLowerCase().includes(itemSearch.toLowerCase()) ||
+    (i.item_zsku || "").toLowerCase().includes(itemSearch.toLowerCase()) ||
+    (i.brand || "").toLowerCase().includes(itemSearch.toLowerCase()) ||
+    (i.pbarcode || "").toLowerCase().includes(itemSearch.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-8 space-y-8">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-lg shadow-sm border border-gray-200">
+    <div className="p-8 max-w-7xl mx-auto space-y-8 bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight">⚙️ noon Cafe Ops - Admin Control</h1>
-          <p className="text-xs text-gray-500 font-medium">Logged in as: <span className="font-bold text-gray-800">{currentUserEmail}</span> (Admin Mode)</p>
+          <div className="flex items-center space-x-2">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Operations Administration</h1>
+            <span className="bg-yellow-400 text-black text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Super Admin</span>
+          </div>
+          <p className="text-xs text-gray-500 font-medium">Logged in: <strong className="text-gray-800 font-mono">{currentUserEmail}</strong></p>
         </div>
-        <div className="flex items-center space-x-3">
-          <a href="/" className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3.5 py-1.5 rounded-lg text-xs font-bold transition">
-            ☕ Go to Barista Portal
+        <div className="flex items-center space-x-2">
+          <a href="/" className="text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-2 rounded-xl border border-gray-200 transition">
+            ← Barista Portal
           </a>
           <button
             onClick={() => {
               localStorage.removeItem("noon_user_email");
               setCurrentUserEmail("");
             }}
-            className="bg-red-50 text-red-600 hover:bg-red-100 px-3.5 py-1.5 rounded-lg text-xs font-bold transition border border-red-200"
+            className="text-xs font-bold text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition"
           >
             Logout
           </button>
         </div>
       </div>
 
-      {/* Edit SKU Modal */}
+      {/* EDIT ITEM MODAL */}
       {editingItem && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center pb-3 border-b">
-              <h3 className="font-bold text-lg text-gray-900">Edit SKU: {editingItem.item_zsku}</h3>
-              <button onClick={() => setEditingItem(null)} className="text-gray-400 hover:text-black font-bold">✕</button>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-gray-200">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-base font-black text-gray-900">Edit SKU Information</h3>
+                <p className="text-xs text-gray-400 font-mono">{editingItem.item_zsku}</p>
+              </div>
+              <button
+                onClick={() => setEditingItem(null)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold flex items-center justify-center text-sm"
+              >
+                ✕
+              </button>
             </div>
-            <form onSubmit={updateItemDetails} className="space-y-3">
+
+            <form onSubmit={saveEditItem} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Product Title</label>
                 <input
                   type="text"
                   required
-                  value={editingItem.product_title || ""}
+                  value={editingItem.product_title}
                   onChange={e => setEditingItem({...editingItem, product_title: e.target.value})}
                   className="w-full border p-2 rounded text-sm font-medium"
                 />
@@ -500,16 +540,7 @@ export default function AdminPortal() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Image URL</label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={editingItem.imageUrl || ""}
-                  onChange={e => setEditingItem({...editingItem, imageUrl: e.target.value})}
-                  className="w-full border p-2 rounded text-sm"
-                />
-              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Portal Type</label>
@@ -538,33 +569,43 @@ export default function AdminPortal() {
                   </select>
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Substitute SKU</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Substitute ZSKU (if OOS)</label>
                   <input
                     type="text"
+                    placeholder="Optional backup SKU"
                     value={editingItem.substitute_zsku || ""}
                     onChange={e => setEditingItem({...editingItem, substitute_zsku: e.target.value})}
                     className="w-full border p-2 rounded text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Max Order Limit</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Max Order Qty</label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="Empty for none"
-                    value={editingItem.max_qty ?? ""}
+                    placeholder="No limit"
+                    value={editingItem.max_qty !== null && editingItem.max_qty !== undefined ? editingItem.max_qty : ""}
                     onChange={e => setEditingItem({...editingItem, max_qty: e.target.value})}
                     className="w-full border p-2 rounded text-sm"
                   />
                 </div>
               </div>
-              <div className="pt-3 flex justify-end space-x-2 border-t">
-                <button type="button" onClick={() => setEditingItem(null)} className="px-4 py-2 border rounded font-semibold text-xs">
+
+              <div className="flex justify-end space-x-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-4 py-2 border rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-50"
+                >
                   Cancel
                 </button>
-                <button type="submit" className="px-4 py-2 bg-black text-white rounded font-bold text-xs hover:bg-gray-800">
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-800 shadow-sm"
+                >
                   Save Changes
                 </button>
               </div>
@@ -573,166 +614,139 @@ export default function AdminPortal() {
         </div>
       )}
 
-      {/* Admin Access Manager */}
-      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200 space-y-4">
-        <h2 className="text-xl font-bold">Admin Team Management</h2>
-        <form onSubmit={addAdmin} className="flex flex-col sm:flex-row gap-3">
+      {/* Row: Cut-off + Excel Reports */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Cutoff Setting */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-xl">⏰</span>
+            <h2 className="text-base font-black text-gray-900 tracking-tight">Daily Cut-off Time (UAE)</h2>
+          </div>
+          <p className="text-xs text-gray-500">
+            Current server & UI cutoff configured for orders dispatch.
+          </p>
+          <div className="flex items-center space-x-3">
+            <input
+              type="time"
+              value={cutoffTime}
+              onChange={(e) => setCutoffTime(e.target.value)}
+              className="border p-2.5 rounded-xl font-mono text-sm font-bold bg-gray-50"
+            />
+            <button
+              onClick={saveCutoff}
+              className="bg-black text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-gray-800 transition"
+            >
+              Update Cut-off
+            </button>
+          </div>
+        </div>
+
+        {/* Excel Reports */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-xl">📊</span>
+            <h2 className="text-base font-black text-gray-900 tracking-tight">Download Replenishment Master</h2>
+          </div>
+          <p className="text-xs text-gray-500">
+            Export consolidated Excel order matrix for dispatch and store replenishment.
+          </p>
+          <div className="flex items-center space-x-3">
+            <input
+              type="date"
+              value={reportDate}
+              onChange={(e) => setReportDate(e.target.value)}
+              className="border p-2.5 rounded-xl font-mono text-sm font-bold bg-gray-50"
+            />
+            <button
+              onClick={downloadReport}
+              className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs hover:bg-emerald-700 transition flex items-center space-x-1"
+            >
+              <span>📥</span>
+              <span>Export .XLSX</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Admin Access Control */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-xl">👥</span>
+            <h2 className="text-base font-black text-gray-900 tracking-tight">Admin Portal Access List</h2>
+          </div>
+          <span className="text-xs text-gray-400 font-semibold">{adminList.length + 1} Authorized Admins</span>
+        </div>
+
+        <form onSubmit={addAdmin} className="flex gap-2">
           <input
             type="email"
-            placeholder="colleague@noon.com"
             required
+            placeholder="Add new admin email (e.g. name@noon.com)"
             value={newAdminEmail}
-            onChange={(e) => setNewAdminEmail(e.target.value)}
-            className="border p-2 rounded flex-1 text-sm"
+            onChange={e => setNewAdminEmail(e.target.value)}
+            className="flex-1 border p-2.5 rounded-xl text-xs font-medium"
           />
-          <button
-            type="submit"
-            className="bg-black text-white px-5 py-2 rounded font-bold text-sm hover:bg-gray-800"
-          >
-            + Add Admin
+          <button type="submit" className="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-gray-800">
+            + Grant Admin
           </button>
         </form>
 
-        <div className="border rounded-lg divide-y">
-          {adminList.map((adminEmail) => (
-            <div key={adminEmail} className="p-3 flex justify-between items-center text-sm">
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold text-gray-800 break-all">{adminEmail}</span>
-                {adminEmail === currentUserEmail && (
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold flex-shrink-0">You</span>
-                )}
-              </div>
-              {adminList.length > 1 && (
-                <button
-                  onClick={() => removeAdmin(adminEmail)}
-                  className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 flex-shrink-0"
-                >
-                  Revoke Access
-                </button>
-              )}
+        <div className="flex flex-wrap gap-2 pt-2">
+          <div className="bg-yellow-50 border border-yellow-200 px-3 py-1.5 rounded-xl text-xs flex items-center space-x-2">
+            <span className="font-mono font-bold text-yellow-900">kangarg@noon.com</span>
+            <span className="text-[10px] font-black uppercase text-yellow-700">(Super Admin)</span>
+          </div>
+          {adminList.map(email => (
+            <div key={email} className="bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl text-xs flex items-center space-x-2">
+              <span className="font-mono text-gray-800">{email}</span>
+              <button
+                onClick={() => removeAdmin(email)}
+                className="text-red-500 hover:text-red-700 font-bold ml-1 text-sm leading-none"
+                title="Revoke access"
+              >
+                ✕
+              </button>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Settings Section */}
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-stone-200 space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-100 pb-3">
+      {/* Store Master */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
           <div>
-            <h2 className="text-xl font-black text-stone-900">Daily Cut-off Settings</h2>
-            <p className="text-xs text-stone-500 font-medium">Orders placed up to this cutoff time will be included in the daily replenishment batch.</p>
+            <h2 className="text-lg font-black text-gray-900 tracking-tight">Store Directory ({stores.length})</h2>
+            <p className="text-xs text-gray-500">Configure retail cafes, DS codes, store emails, and concept brand (SHOT vs NATIVE).</p>
           </div>
-          <span className="self-start sm:self-auto bg-amber-50 text-amber-900 border border-amber-200 text-xs font-black px-3 py-1 rounded-full">
-            🌐 Timezone: {timeZoneDisplay}
-          </span>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 pt-1">
-          <div>
-            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">
-              Daily Cut-off Time ({timeZoneDisplay.split(' ')[0]})
-            </label>
-            <div className="flex items-center space-x-2">
-              <input
-                type="time"
-                value={cutoffTime}
-                onChange={(e) => setCutoffTime(e.target.value)}
-                className="border border-stone-300 p-2.5 rounded-xl font-bold text-stone-900 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-black outline-none w-full sm:w-48"
-              />
-              <span className="text-xs font-black text-stone-700 bg-stone-100 px-3 py-2.5 rounded-xl border border-stone-200">
-                {timeZoneDisplay.split(' ')[0]}
-              </span>
-            </div>
-            <p className="text-[11px] text-stone-500 mt-1.5">
-              Cutoff is strictly locked to <strong>{timeZoneDisplay}</strong>. Example: 18:30 GST (UAE Cafe Time).
-            </p>
-          </div>
-          <button onClick={saveSettings} className="bg-stone-900 hover:bg-black text-white px-6 py-2.5 rounded-xl font-black text-sm transition self-start sm:self-auto shadow-sm">
-            Save Settings
-          </button>
-        </div>
-      </div>
-
-      {/* Reports Section */}
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-stone-200 space-y-4">
-        <div className="border-b border-stone-100 pb-3">
-          <h2 className="text-xl font-black text-stone-900">Export Daily Orders Report</h2>
-          <p className="text-xs text-stone-500 font-medium">
-            Aggregated by store & SKU taking <strong>MAX quantity</strong> per SKU across all submissions. OOS and un-ordered items are excluded.
-          </p>
-        </div>
-
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3">
-          <div>
-            <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">
-              Select Replenishment Date
-            </label>
-            <input
-              type="date"
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
-              className="border border-stone-300 p-2.5 rounded-xl font-bold text-stone-900 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-black outline-none w-full sm:w-48"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => downloadReport('xlsx')} className="bg-yellow-400 text-black px-5 py-2.5 rounded-xl font-black hover:bg-yellow-500 text-sm flex items-center space-x-2 shadow-sm transition active:scale-95">
-              <span>📊</span>
-              <span>Download Excel (.xlsx)</span>
-            </button>
-            <button onClick={() => downloadReport('csv')} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-black hover:bg-emerald-700 text-sm flex items-center space-x-2 shadow-sm transition active:scale-95">
-              <span>📄</span>
-              <span>Download CSV (.csv)</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl text-xs text-stone-600 space-y-1">
-          <div className="font-bold text-stone-800">📋 Routing Rules Applied in Output:</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
-            <div className="bg-white p-2 rounded-lg border border-stone-200">
-              <span className="font-bold text-indigo-700">AUHID02</span>: Assigned to all <code className="bg-stone-100 px-1 py-0.5 rounded font-mono font-bold">AUHDS</code> & <code className="bg-stone-100 px-1 py-0.5 rounded font-mono font-bold">AINDS</code> stores.
-            </div>
-            <div className="bg-white p-2 rounded-lg border border-stone-200">
-              <span className="font-bold text-indigo-700">DXBID04</span>: Assigned to all <code className="bg-stone-100 px-1 py-0.5 rounded font-mono font-bold">DXBDS</code> & <code className="bg-stone-100 px-1 py-0.5 rounded font-mono font-bold">SHJDS</code> stores.
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Manage Stores */}
-      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
-          <h2 className="text-xl font-bold">Manage Stores ({stores.length})</h2>
-          {stores.length > 0 && (
-            <button 
-              onClick={deleteAllStores}
-              className="self-start sm:self-auto bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white px-3 py-1.5 rounded-lg text-sm font-bold transition"
-            >
-              🗑️ Delete All Stores
-            </button>
-          )}
+          <input
+            type="text"
+            placeholder="Search stores..."
+            value={storeSearch}
+            onChange={(e) => setStoreSearch(e.target.value)}
+            className="border p-2 rounded-xl text-xs w-60"
+          />
         </div>
 
         {/* Add Store Form */}
-        <form onSubmit={addStore} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
+        <form onSubmit={addStore} className="grid grid-cols-1 sm:grid-cols-5 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
           <input
-            placeholder="Store Code (e.g. DXBDS01)"
-            required
-            value={storeCode}
-            onChange={(e) => setStoreCode(e.target.value)}
-            className="border p-2 rounded text-sm uppercase"
-          />
-          <input
-            placeholder="Store Name (e.g. Downtown)"
+            placeholder="Store Name (e.g. Dubai Mall)"
             required
             value={storeName}
             onChange={(e) => setStoreName(e.target.value)}
             className="border p-2 rounded text-sm"
           />
           <input
-            placeholder="Assigned Email (e.g. cafe-downtown@noon.com)"
+            placeholder="DS Code (e.g. DXB_01)"
             required
-            type="email"
+            value={storeCode}
+            onChange={(e) => setStoreCode(e.target.value)}
+            className="border p-2 rounded text-sm uppercase font-mono"
+          />
+          <input
+            placeholder="Store Email(s) - comma separated"
+            required
             value={storeEmail}
             onChange={(e) => setStoreEmail(e.target.value)}
             className="border p-2 rounded text-sm"
@@ -740,64 +754,52 @@ export default function AdminPortal() {
           <select
             value={storeType}
             onChange={(e) => setStoreType(e.target.value)}
-            className="border p-2 rounded text-sm"
+            className="border p-2 rounded text-sm font-bold"
           >
-            <option value="SHOT">SHOT</option>
-            <option value="NATIVE">NATIVE</option>
+            <option value="SHOT">SHOT (Express Concept)</option>
+            <option value="NATIVE">NATIVE (Subko Collab)</option>
           </select>
-          <button type="submit" className="bg-black text-white p-2 rounded font-bold text-sm hover:bg-gray-800">
+          <button type="submit" className="bg-black text-white rounded font-bold text-xs py-2 hover:bg-gray-800">
             + Add Store
           </button>
         </form>
 
-        {/* Search Stores */}
-        <div className="mb-3">
-          <input
-            type="text"
-            placeholder="Search stores by code, name, or email..."
-            value={storeSearch}
-            onChange={(e) => setStoreSearch(e.target.value)}
-            className="w-full border p-2 rounded text-sm bg-gray-50 focus:bg-white"
-          />
-        </div>
-
         {/* Store List */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1 border rounded-lg">
-          {filteredStores.map((s) => (
-            <div key={s.ds_code} className="border p-3 rounded-lg bg-gray-50 flex justify-between items-center text-sm shadow-sm">
-              <div className="min-w-0 pr-2">
-                <div className="font-bold text-gray-900 truncate">{s.ds_name}</div>
-                <div className="text-xs text-gray-500 font-mono font-bold flex items-center space-x-1 mt-0.5">
-                  <span>{s.ds_code}</span>
-                  <span>•</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                    s.store_type === 'NATIVE' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          {filteredStores.map(s => (
+            <div key={s.ds_code} className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 flex justify-between items-start">
+              <div className="space-y-1 min-w-0 pr-2">
+                <div className="flex items-center space-x-1.5">
+                  <span className="font-black text-sm text-gray-900 truncate">{s.ds_name}</span>
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                    s.store_type === 'NATIVE' ? 'bg-sky-100 text-sky-800' : 'bg-rose-100 text-rose-800'
                   }`}>
-                    {s.store_type || 'SHOT'}
+                    {s.store_type}
                   </span>
                 </div>
-                <div className="text-[11px] text-gray-400 truncate mt-0.5">{s.email || "No email assigned"}</div>
+                <div className="text-[11px] font-mono text-gray-500 font-bold">{s.ds_code}</div>
+                <div className="text-[11px] text-gray-500 truncate">{s.email}</div>
               </div>
-              <div className="flex items-center space-x-1.5 flex-shrink-0">
+              <div className="flex flex-col items-end space-y-1.5 shrink-0">
+                {/* Swap Store Concept Button */}
                 <button
                   type="button"
-                  onClick={() => toggleStoreBrand(s.ds_code, s.store_type || 'SHOT')}
-                  className={`text-[11px] font-bold px-2 py-1 rounded border transition ${
-                    s.store_type === 'NATIVE'
-                      ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                      : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                  onClick={() => toggleStoreType(s)}
+                  className={`text-[10px] font-black px-2.5 py-1 rounded-lg border transition shadow-sm flex items-center space-x-1 ${
+                    s.store_type === "NATIVE"
+                      ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100"
+                      : "bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100"
                   }`}
-                  title="Click to toggle store between SHOT and NATIVE"
+                  title={`Swap store concept to ${s.store_type === "NATIVE" ? "SHOT" : "NATIVE"}`}
                 >
-                  ⇄ {s.store_type === 'NATIVE' ? 'To SHOT' : 'To NATIVE'}
+                  <span>⇄</span>
+                  <span>To {s.store_type === "NATIVE" ? "SHOT" : "NATIVE"}</span>
                 </button>
                 <button
-                  type="button"
                   onClick={() => removeStore(s.ds_code, s.ds_name)}
-                  className="text-red-500 hover:text-red-700 text-xs font-bold px-2 py-1 rounded hover:bg-red-50"
-                  title="Delete store"
+                  className="text-xs text-red-500 hover:text-red-700 font-bold"
                 >
-                  ✕
+                  Remove
                 </button>
               </div>
             </div>
@@ -805,27 +807,39 @@ export default function AdminPortal() {
         </div>
       </div>
 
-      {/* Manage Items */}
-      <div className="bg-white p-5 sm:p-6 rounded-lg shadow-md border border-gray-200">
-        <h2 className="text-xl font-bold mb-4">Manage Catalog & Inventory ({items.length})</h2>
+      {/* Item Master */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div>
+            <h2 className="text-lg font-black text-gray-900 tracking-tight">Item Master Catalog ({items.length})</h2>
+            <p className="text-xs text-gray-500">Add SKUs, toggle in-stock/OOS status, configure max order quantities, and brand isolation.</p>
+          </div>
+          <input
+            type="text"
+            placeholder="Search items by title, ZSKU, brand..."
+            value={itemSearch}
+            onChange={(e) => setItemSearch(e.target.value)}
+            className="border p-2 rounded-xl text-xs w-72"
+          />
+        </div>
 
         {/* Add Item Form */}
-        <form onSubmit={addItem} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6 bg-gray-50 p-4 rounded-lg border">
+        <form onSubmit={addItem} className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 bg-gray-50 rounded-2xl border border-gray-200">
           <input
-            placeholder="ZSKU Code *"
+            placeholder="ZSKU (e.g. ZSKU1234)"
             required
             value={itemZsku}
             onChange={(e) => setItemZsku(e.target.value)}
-            className="border p-2 rounded text-sm"
+            className="border p-2 rounded text-sm uppercase font-mono"
           />
           <input
-            placeholder="Barcode / EAN"
+            placeholder="Barcode (optional)"
             value={itemBarcode}
             onChange={(e) => setItemBarcode(e.target.value)}
             className="border p-2 rounded text-sm"
           />
           <input
-            placeholder="Product Title *"
+            placeholder="Product Title"
             required
             value={itemTitle}
             onChange={(e) => setItemTitle(e.target.value)}
@@ -837,32 +851,30 @@ export default function AdminPortal() {
             onChange={(e) => setItemBrand(e.target.value)}
             className="border p-2 rounded text-sm"
           />
-          <div className="flex space-x-1">
-            <input
-              placeholder="Unit Size"
-              value={itemUnitSize}
-              onChange={(e) => setItemUnitSize(e.target.value)}
-              className="border p-2 rounded text-sm w-2/3"
-            />
-            <select
-              value={itemUnitType}
-              onChange={(e) => setItemUnitType(e.target.value)}
-              className="border p-2 rounded text-sm w-1/3"
-            >
-              <option value="ml">ml</option>
-              <option value="l">l</option>
-              <option value="g">g</option>
-              <option value="kg">kg</option>
-              <option value="pcs">pcs</option>
-              <option value="roll">roll</option>
-              <option value="box">box</option>
-              <option value="pack">pack</option>
-            </select>
-          </div>
+          <input
+            placeholder="Unit Size (e.g. 1000)"
+            value={itemUnitSize}
+            onChange={(e) => setItemUnitSize(e.target.value)}
+            className="border p-2 rounded text-sm"
+          />
+          <select
+            value={itemUnitType}
+            onChange={(e) => setItemUnitType(e.target.value)}
+            className="border p-2 rounded text-sm"
+          >
+            <option value="ml">ml</option>
+            <option value="l">l</option>
+            <option value="g">g</option>
+            <option value="kg">kg</option>
+            <option value="pcs">pcs</option>
+            <option value="roll">roll</option>
+            <option value="box">box</option>
+            <option value="pack">pack</option>
+          </select>
           <select
             value={itemType}
             onChange={(e) => setItemType(e.target.value)}
-            className="border p-2 rounded text-sm"
+            className="border p-2 rounded text-sm font-semibold"
           >
             <option value="GENERAL">GENERAL (All Stores)</option>
             <option value="NATIVE_ONLY">NATIVE_ONLY</option>
@@ -871,7 +883,7 @@ export default function AdminPortal() {
           <select
             value={itemCategory}
             onChange={(e) => setItemCategory(e.target.value)}
-            className="border p-2 rounded text-sm"
+            className="border p-2 rounded text-sm font-semibold"
           >
             <option value="COFFEE_BEANS">COFFEE_BEANS</option>
             <option value="MILK">MILK</option>
@@ -879,13 +891,7 @@ export default function AdminPortal() {
             <option value="INGREDIENTS">INGREDIENTS</option>
             <option value="EQUIPMENT">EQUIPMENT</option>
           </select>
-          <input
-            placeholder="Image URL (optional)"
-            type="url"
-            value={itemImage}
-            onChange={(e) => setItemImage(e.target.value)}
-            className="border p-2 rounded text-sm sm:col-span-2"
-          />
+
           <input
             placeholder="Substitute ZSKU (if OOS)"
             value={itemSub}
@@ -900,81 +906,76 @@ export default function AdminPortal() {
             onChange={(e) => setItemMaxQty(e.target.value)}
             className="border p-2 rounded text-sm"
           />
-          <button type="submit" className="bg-black text-white p-2 rounded font-bold text-sm hover:bg-gray-800 sm:col-span-2 lg:col-span-4">
-            + Add New SKU to Catalog
+          <button type="submit" className="bg-black text-white rounded font-bold text-xs py-2 hover:bg-gray-800 sm:col-span-2">
+            + Add SKU to Catalog
           </button>
         </form>
 
-        {/* Search Items */}
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Search SKUs by title, SKU code, brand, or barcode..."
-            value={itemSearch}
-            onChange={(e) => setItemSearch(e.target.value)}
-            className="w-full border p-2 rounded text-sm bg-gray-50 focus:bg-white"
-          />
-        </div>
-
-        {/* Item List */}
-        <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-          {filteredItems.map((i) => (
-            <div 
-              key={i.item_zsku} 
-              className={`p-3 rounded-lg border transition shadow-sm ${
-                !i.in_stock ? 'bg-red-50/50 border-red-200' : 'bg-white border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-bold bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded">
-                      {i.item_zsku}
-                    </span>
-                    <span className="font-bold text-sm text-gray-900 leading-snug">
-                      {i.product_title}
-                    </span>
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded uppercase ${
-                      i.item_type === 'NATIVE_ONLY' ? 'bg-blue-100 text-blue-800' :
-                      i.item_type === 'SHOT_ONLY' ? 'bg-rose-100 text-rose-800' :
-                      'bg-gray-100 text-gray-700'
+        {/* Item Cards List */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredItems.map(i => (
+            <div key={i.item_zsku} className={`p-4 rounded-2xl border flex flex-col justify-between space-y-3 bg-white ${
+              !i.in_stock ? 'border-red-200 bg-red-50/20' : 'border-gray-200'
+            }`}>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs font-black text-gray-500">{i.item_zsku}</span>
+                  <div className="flex items-center space-x-1">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                      i.item_type === 'NATIVE_ONLY' ? 'bg-sky-100 text-sky-800' :
+                      i.item_type === 'SHOT_ONLY' ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-700'
                     }`}>
                       {i.item_type}
                     </span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                    {i.pbarcode && <span>Barcode: <span className="font-mono font-medium text-gray-700">{i.pbarcode}</span></span>}
-                    {i.brand && <span>Brand: <span className="font-medium text-gray-700">{i.brand}</span></span>}
-                    {i.unit_size && <span>Size: <span className="font-medium text-gray-700">{i.unit_size} {i.unit_type}</span></span>}
-                    <span>Category: <span className="font-medium text-gray-700">{i.category}</span></span>
-                    {i.substitute_zsku && (
-                      <span className="text-amber-700 font-medium">Sub: {i.substitute_zsku}</span>
-                    )}
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                      {i.category}
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-                  {/* Max Limit Input */}
-                  <div className="flex items-center space-x-1 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg">
-                    <span className="text-[11px] font-semibold text-gray-500">Max:</span>
-                    <input 
-                      type="number" 
-                      min="0"
-                      placeholder="∞" 
-                      defaultValue={i.max_qty || ""} 
-                      onBlur={(e) => updateMaxQty(i.item_zsku, e.target.value)}
-                      className="border border-gray-300 bg-white p-1 rounded w-14 text-center text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-yellow-400" 
-                    />
-                  </div>
+                <h3 className="font-black text-sm text-gray-900 leading-snug">{i.product_title}</h3>
 
+                <div className="flex flex-wrap gap-1 text-[11px] text-gray-500">
+                  {i.brand && <span className="font-semibold text-gray-700">{i.brand} •</span>}
+                  {i.unit_size && <span>{i.unit_size} {i.unit_type} •</span>}
+                  {i.pbarcode && <span className="font-mono">BC: {i.pbarcode}</span>}
+                </div>
+
+                {i.substitute_zsku && (
+                  <div className="text-[11px] text-amber-800 bg-amber-50 px-2 py-1 rounded-md font-semibold">
+                    Backup SKU: <span className="font-mono font-bold">{i.substitute_zsku}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Stock toggle and limits */}
+              <div className="pt-3 border-t border-gray-100 flex flex-col space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-gray-600">Daily Max Qty:</span>
+                  <div className="flex items-center space-x-1.5">
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="∞"
+                      defaultValue={i.max_qty !== null && i.max_qty !== undefined ? i.max_qty : ""}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        updateMaxQty(i.item_zsku, val === "" ? null : parseInt(val));
+                      }}
+                      className="w-14 border rounded px-1.5 py-0.5 text-xs text-center font-bold"
+                    />
+                    <span className="text-[10px] text-gray-400">units</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
                   {/* Stock Toggle */}
-                  <button 
+                  <button
                     onClick={() => toggleStock(i.item_zsku, i.in_stock)}
-                    className={`px-3 py-1.5 text-xs rounded-lg font-bold transition flex items-center space-x-1 shadow-sm ${
-                      i.in_stock 
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200' 
-                        : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                    className={`px-3 py-1.5 text-xs rounded-lg font-bold transition flex items-center space-x-1 ${
+                      i.in_stock
+                        ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                        : 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
                     }`}
                   >
                     <span>{i.in_stock ? "✓ In Stock" : "✕ OOS"}</span>
@@ -984,7 +985,7 @@ export default function AdminPortal() {
                   <button
                     onClick={() => setEditingItem({...i})}
                     className="px-3 py-1.5 text-xs rounded-lg font-bold bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-700 border border-gray-200 transition flex items-center space-x-1"
-                    title="Edit SKU and Image"
+                    title="Edit SKU"
                   >
                     <span>✏️</span>
                     <span>Edit</span>
