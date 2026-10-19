@@ -15,13 +15,6 @@ export default function BaristaPortal() {
   const [admins, setAdmins] = useState<string[]>([]);
   const [userEmail, setUserEmail] = useState<string>("");
   const [loginInput, setLoginInput] = useState<string>("");
-  const [loginStep, setLoginStep] = useState<"EMAIL" | "OTP">("EMAIL");
-  const [otpCode, setOtpCode] = useState("");
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [devPreviewCode, setDevPreviewCode] = useState("");
-  const [resendCountdown, setResendCountdown] = useState(0);
-
   const [selectedStore, setSelectedStore] = useState<any>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,14 +28,6 @@ export default function BaristaPortal() {
   const [isSopOpen, setIsSopOpen] = useState(false);
 
   useEffect(() => {
-    if (resendCountdown <= 0) return;
-    const timer = setInterval(() => {
-      setResendCountdown(prev => prev - 1);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [resendCountdown]);
-
-  useEffect(() => {
     const saved = localStorage.getItem("noon_user_email");
     const expiryStr = localStorage.getItem("noon_session_expires_at");
     const expiry = expiryStr ? parseInt(expiryStr) : 0;
@@ -54,7 +39,7 @@ export default function BaristaPortal() {
         localStorage.removeItem("noon_user_email");
         localStorage.removeItem("noon_session_expires_at");
         setUserEmail("");
-        setLoginError("Your session has expired. Please verify your email with a new code.");
+        setLoginError("Your session has expired. Please sign in again with your official email.");
       }
     } else if (saved) {
       setUserEmail(saved.toLowerCase());
@@ -116,10 +101,9 @@ export default function BaristaPortal() {
     }
   }, [userEmail, stores, admins]);
 
-  const handleSendOtp = async (e?: React.FormEvent) => {
+  const handleLogin = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoginError("");
-    setDevPreviewCode("");
     const email = loginInput.trim().toLowerCase();
     if (!email.endsWith("@noon.com")) {
       setLoginError("Please enter your official @noon.com email address.");
@@ -130,64 +114,19 @@ export default function BaristaPortal() {
       return;
     }
 
-    setIsSendingOtp(true);
-    try {
-      const res = await fetch("/api/auth/otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "send", email }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setLoginStep("OTP");
-        setResendCountdown(60);
-        if (data.devPreview) {
-          setDevPreviewCode(data.devPreview);
-        }
-      } else {
-        setLoginError(data.error || "Failed to send verification code");
-      }
-    } catch (err) {
-      setLoginError("Network error. Please try again.");
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
+    const matched = stores.find(s => matchStoreByEmail(s, email));
+    const isGlobal = (admins.includes(email) || email === "kangarg@noon.com");
+    const isSuper = !!SUPERVISORS[email];
 
-  const handleVerifyOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setLoginError("");
-    const email = loginInput.trim().toLowerCase();
-    const code = otpCode.trim();
-
-    if (code.length < 6) {
-      setLoginError("Please enter the complete 6-digit verification code.");
+    if (!matched && !isGlobal && !isSuper) {
+      setLoginError(`Email "${email}" is not assigned to any cafe store or authorized account. Please contact your manager.`);
       return;
     }
 
-    setIsVerifyingOtp(true);
-    try {
-      const res = await fetch("/api/auth/otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "verify", email, code }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        localStorage.setItem("noon_user_email", data.email);
-        localStorage.setItem("noon_session_expires_at", data.expiresAt.toString());
-        setUserEmail(data.email);
-        setLoginStep("EMAIL");
-        setOtpCode("");
-        setDevPreviewCode("");
-      } else {
-        setLoginError(data.error || "Invalid verification code");
-      }
-    } catch (err) {
-      setLoginError("Network error verifying code. Please try again.");
-    } finally {
-      setIsVerifyingOtp(false);
-    }
+    const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    localStorage.setItem("noon_user_email", email);
+    localStorage.setItem("noon_session_expires_at", expiresAt.toString());
+    setUserEmail(email);
   };
 
   const handleLogout = () => {
@@ -199,9 +138,7 @@ export default function BaristaPortal() {
     setIsAdminMode(false);
     setIsSupervisor(false);
     setSupervisorTitle("");
-    setLoginStep("EMAIL");
-    setOtpCode("");
-    setDevPreviewCode("");
+    setLoginInput("");
     setLoginError("");
   };
 
@@ -303,97 +240,77 @@ export default function BaristaPortal() {
 
   const isNative = selectedStore?.store_type === "NATIVE";
 
-  const filteredItems = useMemo(() => {
-    return items.filter(it => {
-      if (!selectedStore) return false;
-      if (it.item_type === "GENERAL") return true;
-      if (isNative && it.item_type === "NATIVE_ONLY") return true;
-      if (!isNative && it.item_type === "SHOT_ONLY") return true;
-      return false;
-    });
-  }, [items, selectedStore, isNative]);
+  const totalCartCount = useMemo(() => {
+    return Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  }, [cart]);
 
-  const searchedItems = useMemo(() => {
-    if (!searchQuery) return filteredItems;
-    const q = searchQuery.toLowerCase();
-    return filteredItems.filter(i =>
-      (i.product_title && i.product_title.toLowerCase().includes(q)) ||
-      (i.item_zsku && i.item_zsku.toLowerCase().includes(q)) ||
-      (i.barcode && i.barcode.toLowerCase().includes(q)) ||
-      (i.brand && i.brand.toLowerCase().includes(q))
-    );
-  }, [filteredItems, searchQuery]);
-
-  const sections = useMemo(() => {
-    const isIsiCharger = (i: any) => {
+  // CATEGORY & BRAND FILTER LOGIC
+  const { coffeeBeans, baristaMilks, unbrandedItems, packagingItems } = useMemo(() => {
+    const isBean = (i: any) => {
+      const cat = (i.category || "").toUpperCase();
       const t = (i.product_title || "").toLowerCase();
-      const sku = (i.item_zsku || "").toLowerCase();
       const b = (i.brand || "").toLowerCase();
       return (
-        t.includes("charger") ||
-        t.includes("isi ") ||
-        t.startsWith("isi") ||
-        b.includes("isi") ||
-        sku.includes("charger") ||
-        sku.includes("isi") ||
-        t.includes("n2o") ||
-        t.includes("whipper")
+        cat === "COFFEE_BEANS" ||
+        t.includes("blend") ||
+        t.includes("single origin") ||
+        t.includes("roast") ||
+        t.includes("beans") ||
+        b.includes("subko") ||
+        t.includes("subko") ||
+        t.includes("ethiopian") ||
+        t.includes("colombian")
       );
     };
 
     const isMilk = (i: any) => {
-      if (isIsiCharger(i)) return false;
+      const cat = (i.category || "").toUpperCase();
       const t = (i.product_title || "").toLowerCase();
       const b = (i.brand || "").toLowerCase();
-      const cat = (i.category || "").toUpperCase();
-
-      // Exclude cleaning chemicals, tablets, powders, syrups, sauces, and creams (except milk)
-      if (
-        t.includes("clean") || t.includes("everclean") || t.includes("ball") ||
-        t.includes("liquid") || t.includes("tablet") || t.includes("descal") ||
-        t.includes("powder") || t.includes("syrup") || t.includes("sauce")
-      ) return false;
-      if (t.includes("cream") && !t.includes("milk")) return false;
-
-      // 1. Explicit Barista Milk Brands & Lines
-      if (b.includes("oatly") || t.includes("oatly")) return true;
-      if (b.includes("tres_maria") || t.includes("tres maria")) return true;
-      if (b.includes("alpro") || t.includes("alpro")) {
-        if (
-          t.includes("almond") || t.includes("coconut") || t.includes("oat") ||
-          t.includes("soya") || t.includes("soy") || t.includes("barista") || t.includes("milk")
-        ) return true;
-      }
-
-      // 2. Barista milk keywords & category
-      if (t.includes("barista coconut") || t.includes("coconut milk")) return true;
-      if (cat === "MILK") return true;
-
       return (
-        t.includes("milk") || t.includes("oat") || t.includes("almond") ||
-        t.includes("dairy") || t.includes("soy")
+        cat === "MILK" ||
+        t.includes("milk") ||
+        t.includes("oat") ||
+        t.includes("almond") ||
+        t.includes("coconut") ||
+        t.includes("soya") ||
+        t.includes("dairy") ||
+        b.includes("alpro") ||
+        b.includes("oatly") ||
+        b.includes("lacnor") ||
+        b.includes("almarai") ||
+        b.includes("alpro barista")
       );
     };
 
-    const isBean = (i: any) => {
-      if (isIsiCharger(i)) return false;
+    const isIsiCharger = (i: any) => {
       const t = (i.product_title || "").toLowerCase();
-      const cat = (i.category || "").toUpperCase();
       const b = (i.brand || "").toLowerCase();
-      if (t.includes("cleaning") || t.includes("clean") || t.includes("cup") || t.includes("lid") || t.includes("straw") || t.includes("syrup") || t.includes("sauce")) return false;
-      return (
-        cat === "COFFEE_BEANS" ||
-        isSubkoBean(i) ||
-        b.includes("subko") ||
-        t.includes("subko") ||
-        t.includes("blend") ||
-        t.includes("roast") ||
-        t.includes("decaf") ||
-        t.includes("coffee bean")
-      );
+      return t.includes("isi") || t.includes("cream charger") || b.includes("isi");
     };
 
-        const isDecaf = (i: any) => (i.product_title || "").toLowerCase().includes("decaf");
+    const isPackaging = (i: any) => {
+      if (isIsiCharger(i)) return true;
+      const cat = (i.category || "").toUpperCase();
+      if (cat === "PACKAGING") return true;
+      const t = (i.product_title || "").toLowerCase();
+      const b = (i.brand || "").toLowerCase();
+      return (
+        t.includes("cup") ||
+        t.includes("lid") ||
+        t.includes("straw") ||
+        t.includes("bag") ||
+        t.includes("carrier") ||
+        t.includes("napkin") ||
+        t.includes("tissue") ||
+        t.includes("sleeve") ||
+        t.includes("box") ||
+        t.includes("sugar") ||
+        t.includes("charger") ||
+        b.includes("native packaging") ||
+        b.includes("shot packaging")
+      );
+    };
 
     const isUnbranded = (i: any) => {
       if (isIsiCharger(i)) return false;
@@ -401,147 +318,93 @@ export default function BaristaPortal() {
       const cat = (i.category || "").toUpperCase();
       if (cat === "COFFEE_BEANS" || cat === "INGREDIENTS" || cat === "MILK") return false;
       const t = (i.product_title || "").toLowerCase();
-      const b = (i.barcode || "").toUpperCase();
-      return t.includes("unbranded") || b.startsWith("UBNAT");
+      const b = (i.brand || "").toLowerCase();
+      const subkoOrShotWords = ["shot", "subko", "native", "blend", "single origin", "cup", "lid", "straw", "sleeve", "bag"];
+      const hasBrandIndicator = subkoOrShotWords.some(w => t.includes(w) || b.includes(w));
+      return !hasBrandIndicator;
     };
 
-    const isNativeBranded = (i: any) => {
-      if (isIsiCharger(i)) return false;
-      if (isBean(i) || isSubkoBean(i)) return false;
-      if (isMilk(i)) return false;
-      if (isUnbranded(i)) return false;
+    // Filter by Brand / Store Isolation
+    const brandFiltered = items.filter(i => {
+      const title = (i.product_title || "").toLowerCase();
+      const brand = (i.brand || "").toLowerCase();
 
-      const cat = (i.category || "").toUpperCase();
-      if (cat === "COFFEE_BEANS" || cat === "INGREDIENTS" || cat === "MILK") return false;
+      if (isNative) {
+        if (title.includes("shot cup") || title.includes("shot packaging") || brand.includes("shot")) {
+          return false;
+        }
+        if (
+          title.includes("noon minutes") ||
+          title.includes("ethiopian medium") ||
+          (title.includes("roast") && !title.includes("subko") && !title.includes("native"))
+        ) {
+          return false;
+        }
+        return true;
+      } else {
+        if (isSubkoBean(i) || title.includes("subko") || brand.includes("subko")) {
+          return false;
+        }
+        if (title.includes("native") || brand.includes("native")) {
+          return false;
+        }
+        return true;
+      }
+    });
 
-      const t = (i.product_title || "").toLowerCase();
-      const b = (i.barcode || "").toUpperCase();
+    const beans: any[] = [];
+    const milks: any[] = [];
+    const unbranded: any[] = [];
+    const packaging: any[] = [];
 
-      if (t.includes("bean") || t.includes("roast") || t.includes("subko") || t.includes("decaf") || t.includes("blend") || t.includes("charger") || t.includes("isi")) return false;
+    brandFiltered.forEach(i => {
+      if (isIsiCharger(i)) {
+        packaging.push(i);
+      } else if (isBean(i) || isSubkoBean(i)) {
+        beans.push(i);
+      } else if (isMilk(i)) {
+        milks.push(i);
+      } else if (isPackaging(i)) {
+        packaging.push(i);
+      } else if (isUnbranded(i)) {
+        unbranded.push(i);
+      } else {
+        unbranded.push(i);
+      }
+    });
 
-      const isPkgTitle =
-        t.includes("cup") || t.includes("lid") || t.includes("straw") || t.includes("foil") ||
-        t.includes("napkin") || t.includes("sugar") || t.includes("sweetener") || t.includes("stirrers") ||
-        t.includes("sleeve") || t.includes("carrier") || t.includes("box") || (t.includes("bag") && !t.includes("coffee"));
-
-      return (
-        cat === "PACKAGING" ||
-        b.startsWith("NAT") ||
-        isPkgTitle ||
-        ((i.item_type === "NATIVE_ONLY" || i.brand === "native") && isPkgTitle)
-      );
+    return {
+      coffeeBeans: beans,
+      baristaMilks: milks,
+      unbrandedItems: unbranded,
+      packagingItems: packaging,
     };
+  }, [items, isNative]);
 
-    if (isNative) {
-      const subkoBeans = searchedItems.filter(i => isBean(i) && !isDecaf(i));
-      const decafBeans = searchedItems.filter(i => isBean(i) && isDecaf(i));
-      const beansIds = new Set(subkoBeans.concat(decafBeans).map(i => i.item_zsku));
+  const searchFilter = (list: any[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase();
+    return list.filter(i =>
+      (i.product_title || "").toLowerCase().includes(q) ||
+      (i.item_zsku || "").toLowerCase().includes(q) ||
+      (i.brand || "").toLowerCase().includes(q)
+    );
+  };
 
-      const brandedPkg = searchedItems.filter(i => !beansIds.has(i.item_zsku) && isNativeBranded(i));
-      const unbrandedPkg = searchedItems.filter(i => !beansIds.has(i.item_zsku) && isUnbranded(i));
-      const pkgIds = new Set(brandedPkg.concat(unbrandedPkg).map(i => i.item_zsku));
+  const filteredBeans = useMemo(() => searchFilter(coffeeBeans), [coffeeBeans, searchQuery]);
+  const filteredMilks = useMemo(() => searchFilter(baristaMilks), [baristaMilks, searchQuery]);
+  const filteredUnbranded = useMemo(() => searchFilter(unbrandedItems), [unbrandedItems, searchQuery]);
+  const filteredPackaging = useMemo(() => searchFilter(packagingItems), [packagingItems, searchQuery]);
 
-      const milks = searchedItems.filter(i => !beansIds.has(i.item_zsku) && !pkgIds.has(i.item_zsku) && isMilk(i));
-      const milksIds = new Set(milks.map(i => i.item_zsku));
-
-      const ingredients = searchedItems.filter(i => !beansIds.has(i.item_zsku) && !pkgIds.has(i.item_zsku) && !milksIds.has(i.item_zsku));
-
-      return [
-        {
-          id: "NATIVE_COFFEE",
-          title: "☕ Coffee Beans (SUBKO Speciality Coffee - NATIVE & NICHE)",
-          badge: "SUBKO Collab",
-          desc: "NATIVE Blend & NICHE Blend from SUBKO (Daily limit: 1 bag/day; Niche Blend: 1–2 bags max/month).",
-          items: subkoBeans,
-          subsections: [
-            {
-              id: "NATIVE_DECAF",
-              title: "🌿 Decaf Beans",
-              desc: "Decaffeinated single-origin coffee (Decaf Colombia Ground).",
-              items: decafBeans,
-            }
-          ]
-        },
-        {
-          id: "NATIVE_MILKS",
-          title: "🥛 Barista Milks",
-          badge: "Dairy & Plant Milks",
-          desc: "Oat milk, Almond milk & barista dairy / plant milk formulations.",
-          items: milks,
-          subsections: []
-        },
-        {
-          id: "NATIVE_INGREDIENTS",
-          title: "🍯 Ingredients & Essentials",
-          badge: "Syrups & Essentials",
-          desc: "All syrups, sauces, frappe mixes, ISI cream chargers, cleaning essentials & supplies.",
-          items: ingredients,
-          subsections: []
-        },
-        {
-          id: "NATIVE_BRANDED_PKG",
-          title: "📦 NATIVE Branded Packaging",
-          badge: "Official Native",
-          desc: "Branded double-wall cups, lids, u-cups, straws, foils, stirrers & sugars.",
-          items: brandedPkg,
-          subsections: []
-        },
-        {
-          id: "NATIVE_UNBRANDED_PKG",
-          title: "📦 Unbranded Packaging for NATIVE (Backup)",
-          badge: "Backup Stock",
-          desc: "Used when NATIVE branded packaging of any type is unavailable.",
-          items: unbrandedPkg,
-          subsections: []
-        }
-      ];
-    } else {
-      const beans = searchedItems.filter(i => isBean(i));
-      const milks = searchedItems.filter(i => isMilk(i) && !isBean(i));
-      const beansIds = new Set(beans.map(i => i.item_zsku));
-      const milksIds = new Set(milks.map(i => i.item_zsku));
-      const ingredients = searchedItems.filter(i => !beansIds.has(i.item_zsku) && !milksIds.has(i.item_zsku));
-
-      return [
-        {
-          id: "SHOT_COFFEE",
-          title: "☕ Coffee Beans (All Three)",
-          badge: "3 Signature Roasts",
-          desc: "Noon Minutes Blend (Signature), Ethiopian Medium Roast & Colombian Decaf.",
-          items: beans,
-          subsections: []
-        },
-        {
-          id: "SHOT_MILKS",
-          title: "🥛 Barista Milks",
-          badge: "Dairy & Plant Milks",
-          desc: "Oat milk, Almond milk & barista dairy / plant milk formulations.",
-          items: milks,
-          subsections: []
-        },
-        {
-          id: "SHOT_INGREDIENTS",
-          title: "🍯 Ingredients & Essentials",
-          badge: "Syrups & Supplies",
-          desc: "All syrups, sauces, frappe powders, coconut cream, chai, matcha, cleaning liquids & essentials.",
-          items: ingredients,
-          subsections: []
-        }
-      ];
-    }
-  }, [isNative, searchedItems]);
-
-  const totalUnits = Object.values(cart).reduce((a, b) => a + b, 0);
-  const totalSkus = Object.values(cart).filter(q => q > 0).length;
-
+  // LOGIN SCREEN
   if (!userEmail) {
     return (
-      <div className="min-h-screen flex flex-col justify-between py-12 px-4 bg-stone-50">
-        <div className="max-w-md mx-auto w-full text-center space-y-3">
-          <div className="inline-flex items-center space-x-2 bg-white px-4 py-1.5 rounded-full border border-stone-200 shadow-sm">
-            <span className="font-black text-xs text-stone-900">noon CAFE OPS</span>
-            <span className="text-stone-300">•</span>
-            <span className="bg-[#1864AB] text-white text-[10px] font-black px-2 py-0.5 rounded-full">NATIVE × SUBKO</span>
+      <div className="min-h-screen bg-stone-100 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 space-y-6">
+        <div className="max-w-md mx-auto w-full text-center space-y-2">
+          <div className="inline-flex items-center space-x-2 bg-stone-900 text-white px-3 py-1.5 rounded-full text-xs font-black tracking-wider uppercase">
+            <span>noon Speciality Coffee</span>
+            <span className="text-stone-400">•</span>
+            <span className="bg-[#1864AB] text-white text-[10px] font-black px-2 py-0.5 rounded-full">NATIVE</span>
             <span className="bg-[#6B0B20] text-white text-[10px] font-black px-2 py-0.5 rounded-full">SHOT</span>
           </div>
         </div>
@@ -555,105 +418,45 @@ export default function BaristaPortal() {
             <p className="text-xs text-stone-500 font-medium">Official stock replenishment & recipe compliance system.</p>
           </div>
 
-          {loginStep === "EMAIL" ? (
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">Official @noon.com Email ID</label>
-                <input
-                  type="email"
-                  placeholder="cafe-Downtown@noon.com"
-                  required
-                  value={loginInput}
-                  onChange={e => setLoginInput(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:outline-none"
-                />
-                <p className="text-[11px] text-stone-400 mt-1">We will send a 6-digit login verification code to this inbox.</p>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">Official @noon.com Email ID</label>
+              <input
+                type="email"
+                placeholder="cafe-Downtown@noon.com"
+                required
+                value={loginInput}
+                onChange={e => setLoginInput(e.target.value)}
+                className="w-full px-4 py-3 rounded-2xl border border-stone-300 text-sm font-medium bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:outline-none"
+              />
+              <p className="text-[11px] text-stone-400 mt-1">Enter your store or authorized account email to proceed.</p>
 
-                {detectedStore && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
-                    <div className="text-[10px] font-black uppercase text-emerald-700">Verified Cafe Store:</div>
-                    <div className="font-black text-stone-900 text-sm">{detectedStore.ds_name} ({detectedStore.ds_code})</div>
-                    <div className="text-[11px] text-stone-600">Store Brand: <span className="font-bold">{detectedStore.store_type}</span> • Login Duration: <strong>7 Days (1 Week)</strong></div>
-                  </div>
-                )}
-
-                {detectedSupervisor && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
-                    <div className="text-[10px] font-black uppercase text-amber-700">Verified Supervisor:</div>
-                    <div className="font-black text-stone-900 text-sm">{detectedSupervisor}</div>
-                    <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration (View-Only Mode)</span> • Login Duration: <strong>30 Days (1 Month)</strong></div>
-                  </div>
-                )}
-              </div>
-
-              {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
-
-              <button
-                type="submit"
-                disabled={isSendingOtp}
-                className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm transition disabled:bg-stone-400"
-              >
-                {isSendingOtp ? "Sending Verification Code..." : "Send Verification Code →"}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-2xl text-xs space-y-1">
-                <div className="font-black text-xs text-blue-950 uppercase tracking-wider">Verification Code Sent</div>
-                <div className="text-[11px] text-blue-800">Check your inbox for a 6-digit code sent to:</div>
-                <div className="font-mono font-bold text-stone-900 text-xs break-all">{loginInput}</div>
-              </div>
-
-              {devPreviewCode && (
-                <div className="bg-amber-50 border border-amber-300 text-amber-900 p-3 rounded-2xl text-xs font-semibold space-y-1">
-                  <div>🧪 <strong>Instant Testing Code:</strong> <span className="font-mono text-base font-black tracking-widest text-indigo-700">{devPreviewCode}</span></div>
-                  <div className="text-[10px] text-amber-700 font-normal">Displayed directly for seamless testing before setting your RESEND_API_KEY.</div>
+              {detectedStore && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
+                  <div className="text-[10px] font-black uppercase text-emerald-700">Verified Cafe Store:</div>
+                  <div className="font-black text-stone-900 text-sm">{detectedStore.ds_name} ({detectedStore.ds_code})</div>
+                  <div className="text-[11px] text-stone-600">Store Brand: <span className="font-bold">{detectedStore.store_type}</span> • Login Duration: <strong>30 Days (1 Month)</strong></div>
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 uppercase tracking-wider mb-1.5">Enter 6-Digit Code</label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="123456"
-                  required
-                  value={otpCode}
-                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  className="w-full text-center tracking-[10px] font-mono font-black text-2xl py-3 rounded-2xl border border-stone-300 bg-stone-50 focus:bg-white focus:ring-2 focus:ring-[#1864AB] focus:outline-none"
-                  autoFocus
-                />
-              </div>
+              {detectedSupervisor && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 p-3 rounded-2xl text-xs font-semibold mt-2.5 space-y-0.5">
+                  <div className="text-[10px] font-black uppercase text-amber-700">Verified Supervisor:</div>
+                  <div className="font-black text-stone-900 text-sm">{detectedSupervisor}</div>
+                  <div className="text-[11px] text-stone-600">Access: <span className="font-bold">Catalog Exploration & Testing Responses</span> • Login Duration: <strong>30 Days (1 Month)</strong></div>
+                </div>
+              )}
+            </div>
 
-              {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
+            {loginError && <div className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-xl text-xs font-medium">⚠️ {loginError}</div>}
 
-              <button
-                type="submit"
-                disabled={isVerifyingOtp || otpCode.length < 6}
-                className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm transition disabled:bg-stone-300"
-              >
-                {isVerifyingOtp ? "Verifying..." : "Verify Code & Sign In →"}
-              </button>
-
-              <div className="flex items-center justify-between text-xs pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setLoginStep("EMAIL"); setOtpCode(""); setLoginError(""); }}
-                  className="text-stone-500 hover:text-stone-900 font-bold"
-                >
-                  ← Change Email
-                </button>
-                <button
-                  type="button"
-                  disabled={resendCountdown > 0 || isSendingOtp}
-                  onClick={() => handleSendOtp()}
-                  className={`font-bold ${resendCountdown > 0 ? 'text-stone-400 cursor-not-allowed' : 'text-[#1864AB] hover:underline'}`}
-                >
-                  {resendCountdown > 0 ? `Resend in ${resendCountdown}s` : "Resend Code"}
-                </button>
-              </div>
-            </form>
-          )}
+            <button
+              type="submit"
+              className="w-full bg-stone-900 hover:bg-black text-white py-3.5 rounded-2xl font-black text-sm transition shadow-md hover:shadow-lg active:scale-[0.99]"
+            >
+              Enter Portal →
+            </button>
+          </form>
 
           <div className="pt-4 border-t border-stone-100 flex items-center justify-between text-xs text-stone-500">
             <button
@@ -683,435 +486,404 @@ export default function BaristaPortal() {
               <span className={`text-xs font-black tracking-widest uppercase ${isNative ? 'text-amber-200' : 'text-[#FFF000]'}`}>
                 {isNative ? "SUBKO COLLAB" : "SHOT"}
               </span>
-              <span className="text-white font-black text-sm tracking-wide">{isNative ? "NATIVE CAFE" : "CAFE OPERATIONS"}</span>
+              <span className="text-white/40">|</span>
+              <span className="text-xs font-bold tracking-tight">
+                {isNative ? "NATIVE CAFE" : "SHOT CAFE"}
+              </span>
             </div>
 
             <div className="flex items-center space-x-2">
               <button
                 type="button"
                 onClick={() => setIsSopOpen(true)}
-                className="bg-white/20 hover:bg-white/30 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl border border-white/20 flex items-center space-x-1 shadow-sm"
+                className="bg-white/15 hover:bg-white/25 text-white font-bold text-xs px-3 py-1.5 rounded-full border border-white/20 flex items-center space-x-1.5 transition"
               >
                 <span>📖</span>
-                <span>Barista SOP</span>
+                <span className="hidden sm:inline">Barista SOP</span>
               </button>
+
               {isAdminMode && (
-                <a href="/admin" className="bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-2.5 py-1.5 rounded-xl shadow">
-                  ⚙️ Admin
+                <a
+                  href="/admin"
+                  className="bg-white/15 hover:bg-white/25 text-white font-bold text-xs px-3 py-1.5 rounded-full border border-white/20 transition flex items-center space-x-1"
+                >
+                  <span>⚙️</span>
+                  <span>Admin</span>
                 </a>
               )}
-              <button onClick={handleLogout} className="bg-white/15 hover:bg-white/25 text-white font-bold text-xs px-2.5 py-1.5 rounded-xl">
-                Logout
-              </button>
-            </div>
-          </div>
 
-          <div className="flex items-center justify-between text-xs pt-1 border-t border-white/15">
-            <div className="flex items-center space-x-2 truncate">
-              <span className="bg-white/20 px-2 py-0.5 rounded-md font-black text-[10px] uppercase">{isNative ? "NATIVE STORE" : "SHOT STORE"}</span>
-              <span className="font-extrabold text-sm truncate">📍 {selectedStore?.ds_name} ({selectedStore?.ds_code})</span>
-              {!isAdminMode && !isSupervisor && <span className="bg-white/15 text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/20">🔒 Locked</span>}
-              {isSupervisor && <span className="bg-amber-300 text-stone-900 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">👁️ {supervisorTitle} (View-Only Mode)</span>}
-            </div>
-
-            {(isAdminMode || isSupervisor) && stores.length > 0 && (
-              <select
-                value={selectedStore?.ds_code || ""}
-                onChange={(e) => {
-                  const s = stores.find(st => st.ds_code === e.target.value);
-                  if (s) { setSelectedStore(s); setCart({}); }
-                }}
-                className="bg-white text-stone-900 font-bold text-xs rounded-lg px-2 py-1 outline-none"
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="bg-white/10 hover:bg-white/20 text-white/90 text-xs font-medium px-3 py-1.5 rounded-full border border-white/15 transition"
               >
-                {stores.map(s => <option key={s.ds_code} value={s.ds_code}>{s.ds_name} ({s.store_type})</option>)}
-              </select>
-            )}
+                Sign Out
+              </button>
+            </div>
           </div>
 
-          <div className="relative pt-0.5">
-            <input
-              type="text"
-              placeholder={`Search "${isNative ? 'subko, colombian decaf, oat milk, cups, sugars...' : 'coffee beans, oat milk, cups, syrups...'}"`}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-10 py-2.5 rounded-full bg-white text-stone-900 placeholder-stone-400 text-sm font-medium shadow-inner focus:outline-none"
-            />
-            <span className="absolute left-3.5 top-3 text-stone-400 text-sm">🔍</span>
-            {searchQuery && (
-              <button onClick={() => setSearchQuery("")} className="absolute right-3.5 top-2.5 bg-stone-200 text-stone-700 w-6 h-6 rounded-full text-xs font-bold">
-                ✕
-              </button>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-white/10">
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-lg font-black tracking-tight">{selectedStore?.ds_name || "Cafe Store"}</span>
+                <span className="text-xs bg-black/30 text-white font-mono px-2 py-0.5 rounded-md font-semibold">{selectedStore?.ds_code}</span>
+                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${isNative ? 'bg-amber-300 text-amber-950' : 'bg-rose-200 text-rose-950'}`}>
+                  {selectedStore?.store_type} BRAND
+                </span>
+              </div>
+              <p className="text-[11px] text-white/80 font-medium">Logged in as: <span className="font-mono">{userEmail}</span></p>
+            </div>
+
+            {isAdminMode && (
+              <div className="flex items-center space-x-2 bg-black/25 px-3 py-1.5 rounded-xl border border-white/15">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-200">Admin Store Switch:</span>
+                <select
+                  value={selectedStore?.ds_code || ""}
+                  onChange={e => {
+                    const found = stores.find(s => s.ds_code === e.target.value);
+                    if (found) setSelectedStore(found);
+                  }}
+                  className="bg-white text-stone-900 text-xs font-bold rounded-lg px-2.5 py-1 border-0 focus:ring-2 focus:ring-amber-300"
+                >
+                  {stores.map(s => (
+                    <option key={s.ds_code} value={s.ds_code}>
+                      {s.ds_name} ({s.store_type})
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
           </div>
         </div>
       </header>
 
-      {/* SECTION FILTER BAR */}
-      <div className="bg-white border-b border-stone-200 shadow-sm sticky top-[138px] z-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center space-x-2 overflow-x-auto">
-          <button
-            onClick={() => setSelectedSection("ALL")}
-            className={`px-3.5 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap ${
-              selectedSection === "ALL" ? "bg-stone-900 text-white" : "bg-stone-100 hover:bg-stone-200 text-stone-700"
-            }`}
-          >
-            All Sections
-          </button>
-          {sections.map(sec => (
+      {/* SUPERVISOR VIEW-ONLY BANNER */}
+      {isSupervisor && (
+        <div className="bg-amber-100 border-b border-amber-300 text-amber-900 px-4 py-2.5 text-xs font-semibold flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <span className="text-base">👀</span>
+            <span>
+              <strong>Supervisor Mode ({supervisorTitle}):</strong> You are in View-Only inspection mode. You can test and inspect catalogs across branches. Placing replenishment orders is disabled.
+            </span>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0">
+            <span className="text-[11px] font-bold text-amber-800 uppercase">Viewing Branch:</span>
+            <select
+              value={selectedStore?.ds_code || ""}
+              onChange={e => {
+                const found = stores.find(s => s.ds_code === e.target.value);
+                if (found) setSelectedStore(found);
+              }}
+              className="bg-white text-stone-900 text-xs font-bold rounded-md px-2 py-1 border border-amber-300"
+            >
+              {stores.map(s => (
+                <option key={s.ds_code} value={s.ds_code}>
+                  {s.ds_name} ({s.store_type})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* SEARCH & CATEGORY FILTER TABS */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-2 space-y-4">
+        {/* Search */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search beans, milks, syrups, cups, packaging by title, brand, or SKU..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-stone-200 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1864AB] text-stone-900 font-medium"
+          />
+          <span className="absolute left-4 top-3.5 text-stone-400 text-base">🔍</span>
+          {searchQuery && (
             <button
-              key={sec.id}
-              onClick={() => setSelectedSection(sec.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-black transition whitespace-nowrap border ${
-                selectedSection === sec.id
-                  ? (isNative ? "bg-[#1864AB] text-white border-[#1864AB]" : "bg-[#6B0B20] text-white border-[#6B0B20]")
-                  : "bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3.5 top-3 text-stone-400 hover:text-stone-600 text-xs bg-stone-100 rounded-full px-2 py-1"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+
+        {/* Section Navigation Tabs */}
+        <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
+          {[
+            { id: "ALL", label: "All Items", icon: "📦", count: coffeeBeans.length + baristaMilks.length + unbrandedItems.length + packagingItems.length },
+            { id: "BEANS", label: isNative ? "Subko Specialty Beans" : "Coffee Beans", icon: "☕", count: coffeeBeans.length },
+            { id: "MILKS", label: "Barista Milks", icon: "🥛", count: baristaMilks.length },
+            { id: "UNBRANDED", label: "Ingredients & Syrups", icon: "🍯", count: unbrandedItems.length },
+            { id: "PACKAGING", label: isNative ? "Native Packaging" : "Packaging & Supplies", icon: "🥡", count: packagingItems.length },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedSection(tab.id)}
+              className={`flex items-center space-x-2 px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
+                selectedSection === tab.id
+                  ? (isNative ? "bg-[#1864AB] text-white shadow-sm" : "bg-[#6B0B20] text-white shadow-sm")
+                  : "bg-white text-stone-700 hover:bg-stone-100 border border-stone-200"
               }`}
             >
-              {sec.title.replace(/\s*\(.*/, "")}
+              <span>{tab.icon}</span>
+              <span>{tab.label}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                selectedSection === tab.id ? "bg-white/20 text-white" : "bg-stone-100 text-stone-600"
+              }`}>
+                {tab.count}
+              </span>
             </button>
           ))}
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
-        {/* BARISTA BANNER */}
-        <div className={`rounded-3xl overflow-hidden shadow-lg border p-5 ${
-          isNative ? 'bg-gradient-to-b from-[#FFF9EE] to-[#FFF3DC] border-sky-200' : 'bg-gradient-to-b from-[#FFF5F6] to-[#FFEBEF] border-rose-200'
-        }`}>
-          <div className="text-center space-y-1 mb-4">
-            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded tracking-widest uppercase ${
-              isNative ? 'bg-[#FFF3DC] text-[#8C1826]' : 'bg-[#FFF000] text-black'
-            }`}>
-              {isNative ? "NATIVE × SUBKO QUALITY STANDARDS" : "SHOT BARISTA PROMISE"}
-            </span>
-            <h2 className={`text-xl sm:text-2xl font-black uppercase ${isNative ? 'text-[#8C1826]' : 'text-[#6B0B20]'}`}>
-              {isNative ? "MADE BY HAND, SERVED WITH HEART" : "No Shortcuts • Fresh Preparation"}
-            </h2>
-            <p className="text-xs font-semibold text-stone-700 max-w-lg mx-auto">
-              {isNative
-                ? "Every Native cup represents our craft collaboration with Subko. Baristas must maintain precise dial-in parameters, spotless hygiene, and fresh preparation."
-                : "Hand-poured by baristas for every single ticket. Follow BRM recipe measures, maintain spotless stations, and prepare beverages strictly on demand."}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="bg-white/90 p-3 rounded-2xl border border-stone-200 text-center space-y-1">
-              <span className="text-xl">⚖️</span>
-              <div className="text-xs font-black text-stone-900">Follow BRMs</div>
-              <p className="text-[10px] text-stone-600">Accurate dry dose, recipe measures & extraction timing.</p>
+      {/* CATALOG CONTENT */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-8">
+        {/* SECTION: COFFEE BEANS */}
+        {(selectedSection === "ALL" || selectedSection === "BEANS") && filteredBeans.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">☕</span>
+                <h2 className="text-base font-black text-stone-900 tracking-tight">
+                  {isNative ? "SUBKO Specialty Beans (Native & Niche)" : "Signature Coffee Beans"}
+                </h2>
+                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  {filteredBeans.length} Products
+                </span>
+              </div>
+              {isNative && (
+                <span className="text-[11px] text-amber-700 font-bold bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
+                  ⚖️ Strictly 1 unit / day per store
+                </span>
+              )}
             </div>
-            <div className="bg-white/90 p-3 rounded-2xl border border-stone-200 text-center space-y-1">
-              <span className="text-xl">🧼</span>
-              <div className="text-xs font-black text-stone-900">Station Hygiene</div>
-              <p className="text-[10px] text-stone-600">Sanitized cloths, clean tamper base & wiped steam wands.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredBeans.map(item => (
+                <ItemCard
+                  key={item.item_zsku}
+                  item={item}
+                  qty={cart[item.item_zsku] || 0}
+                  onUpdateQty={qty => updateCart(item.item_zsku, qty, item)}
+                  isSubkoBean={isSubkoBean(item)}
+                  isSubkoNiche={isSubkoNiche(item)}
+                  limit={getItemEffectiveLimit(item)}
+                  isNative={isNative}
+                  isSupervisor={isSupervisor}
+                />
+              ))}
             </div>
-            <div className="bg-white/90 p-3 rounded-2xl border border-stone-200 text-center space-y-1">
-              <span className="text-xl">☕</span>
-              <div className="text-xs font-black text-stone-900">Fresh Pulls</div>
-              <p className="text-[10px] text-stone-600">Never serve expired shots. Pull fresh on ticket arrival.</p>
+          </section>
+        )}
+
+        {/* SECTION: BARISTA MILKS */}
+        {(selectedSection === "ALL" || selectedSection === "MILKS") && filteredMilks.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">🥛</span>
+                <h2 className="text-base font-black text-stone-900 tracking-tight">Barista Milks (Dairy & Plant-Based)</h2>
+                <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  {filteredMilks.length} Products
+                </span>
+              </div>
             </div>
-            <div className="bg-white/90 p-3 rounded-2xl border border-stone-200 text-center space-y-1">
-              <span className="text-xl">📦</span>
-              <div className="text-xs font-black text-stone-900">Spill-Proof</div>
-              <p className="text-[10px] text-stone-600">Secure cup lids tightly for rapid 15-minute dispatch.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredMilks.map(item => (
+                <ItemCard
+                  key={item.item_zsku}
+                  item={item}
+                  qty={cart[item.item_zsku] || 0}
+                  onUpdateQty={qty => updateCart(item.item_zsku, qty, item)}
+                  isSubkoBean={false}
+                  isSubkoNiche={false}
+                  limit={getItemEffectiveLimit(item)}
+                  isNative={isNative}
+                  isSupervisor={isSupervisor}
+                />
+              ))}
             </div>
-          </div>
-        </div>
+          </section>
+        )}
 
-        {/* SECTIONS & ITEMS */}
-        <div className="space-y-8">
-          {sections
-            .filter(sec => selectedSection === "ALL" || selectedSection === sec.id)
-            .map(sec => {
-              const totalSecCount = sec.items.length + (sec.subsections?.reduce((a, s) => a + s.items.length, 0) || 0);
-              if (totalSecCount === 0 && searchQuery) return null;
+        {/* SECTION: INGREDIENTS & SYRUPS (UNBRANDED) */}
+        {(selectedSection === "ALL" || selectedSection === "UNBRANDED") && filteredUnbranded.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">🍯</span>
+                <h2 className="text-base font-black text-stone-900 tracking-tight">Syrups, Sauces & General Ingredients</h2>
+                <span className="bg-stone-100 text-stone-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  {filteredUnbranded.length} Products
+                </span>
+              </div>
+            </div>
 
-              return (
-                <section key={sec.id} className="space-y-4">
-                  <div className="border-b border-stone-200 pb-2 flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <h3 className="text-lg font-black text-stone-900 tracking-tight">{sec.title}</h3>
-                      <span className="bg-stone-200 text-stone-700 text-xs font-black px-2 py-0.5 rounded-full">{totalSecCount}</span>
-                    </div>
-                    <span className="text-[11px] font-bold text-stone-500 uppercase">{sec.badge}</span>
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredUnbranded.map(item => (
+                <ItemCard
+                  key={item.item_zsku}
+                  item={item}
+                  qty={cart[item.item_zsku] || 0}
+                  onUpdateQty={qty => updateCart(item.item_zsku, qty, item)}
+                  isSubkoBean={false}
+                  isSubkoNiche={false}
+                  limit={getItemEffectiveLimit(item)}
+                  isNative={isNative}
+                  isSupervisor={isSupervisor}
+                />
+              ))}
+            </div>
+          </section>
+        )}
 
-                  {sec.items.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {sec.items.map(item => {
-                        const qty = cart[item.item_zsku] || 0;
-                        const isSubko = isSubkoBean(item);
-                        const isNiche = isSubkoNiche(item);
-                        const isOos = !item.in_stock || item.max_qty === 0;
-                        const effectiveLimit = getItemEffectiveLimit(item);
+        {/* SECTION: PACKAGING & SUPPLIES */}
+        {(selectedSection === "ALL" || selectedSection === "PACKAGING") && filteredPackaging.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between border-b border-stone-200 pb-2">
+              <div className="flex items-center space-x-2">
+                <span className="text-xl">🥡</span>
+                <h2 className="text-base font-black text-stone-900 tracking-tight">
+                  {isNative ? "NATIVE Branded Cups, Lids & Packaging" : "SHOT Branded Packaging & Disposables"}
+                </h2>
+                <span className="bg-stone-100 text-stone-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  {filteredPackaging.length} Products
+                </span>
+              </div>
+            </div>
 
-                        return (
-                          <div key={item.item_zsku} className={`bg-white rounded-2xl p-4 shadow-sm border flex flex-col justify-between space-y-3 ${
-                            isOos ? 'border-red-200 bg-red-50/20' : 'border-stone-200'
-                          }`}>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {item.brand && <span className="bg-stone-100 text-stone-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">{item.brand.replace(/_/g, " ")}</span>}
-                                {item.unit_size && item.unit_type && <span className="bg-amber-50 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md">{item.unit_size} {item.unit_type}</span>}
-                                {item.max_qty === 0 && <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-md">Max: 0</span>}
-                                {item.max_qty !== null && item.max_qty !== undefined && item.max_qty > 0 && !isSubko && (
-                                  <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md">Max: {item.max_qty}</span>
-                                )}
-                                {isNiche && <span className="bg-purple-100 text-purple-900 text-[10px] font-black px-2 py-0.5 rounded-md">Max: 1 / day (Monthly: 1–2)</span>}
-                                {isSubko && !isNiche && <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md">Max: 1 / day</span>}
-                              </div>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${isOos ? 'bg-rose-100 text-rose-800' : 'bg-emerald-50 text-emerald-700'}`}>
-                                {isOos ? "OUT OF STOCK" : "In Stock"}
-                              </span>
-                            </div>
-
-                            <div className="space-y-1">
-                              <h4 className={`font-extrabold text-base leading-snug ${isOos ? 'text-stone-500' : 'text-stone-900'}`}>{item.product_title}</h4>
-                              <div className="text-[11px] font-mono text-stone-500">SKU: {item.item_zsku} {item.barcode && `• Barcode: ${item.barcode}`}</div>
-                            </div>
-
-                            {isOos && (
-                              <div className="bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium p-2 rounded-xl">
-                                ⚠️ Currently Out of Stock (Limit: 0)
-                              </div>
-                            )}
-
-                            <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
-                              <span className="text-xs font-bold text-stone-500">Order Qty:</span>
-                              {isSupervisor ? (
-                                <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-amber-50 text-amber-800 border border-amber-200">
-                                  👁️ View Only
-                                </div>
-                              ) : isOos ? (
-                                <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
-                                  OOS (Limit: 0)
-                                </div>
-                              ) : qty === 0 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => updateCart(item.item_zsku, 1, item)}
-                                  className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm ${
-                                    isNative ? "bg-[#1864AB] text-white hover:bg-[#13508A]" : "bg-[#6B0B20] text-white hover:bg-[#520818]"
-                                  }`}
-                                >
-                                  + ADD
-                                </button>
-                              ) : (
-                                <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
-                                  <button type="button" onClick={() => updateCart(item.item_zsku, qty - 1, item)} className="w-7 h-7 rounded-full bg-white text-stone-800 font-black text-sm flex items-center justify-center">–</button>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    max={effectiveLimit || undefined}
-                                    value={qty}
-                                    onChange={e => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item)}
-                                    className="w-12 text-center font-black text-sm bg-transparent outline-none"
-                                  />
-                                  <button type="button" onClick={() => updateCart(item.item_zsku, qty + 1, item)} className={`w-7 h-7 rounded-full text-white font-black text-sm flex items-center justify-center ${
-                                    isNative ? "bg-[#1864AB]" : "bg-[#6B0B20]"
-                                  }`}>+</button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {sec.subsections && sec.subsections.map(sub => (
-                    <div key={sub.id} className="pt-3 pl-2 sm:pl-4 border-l-2 border-amber-300 space-y-3 mt-4">
-                      <div>
-                        <h4 className="text-sm font-black text-[#8C1826] tracking-tight">{sub.title}</h4>
-                        <p className="text-xs text-stone-500">{sub.desc}</p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {sub.items.map(item => {
-                          const qty = cart[item.item_zsku] || 0;
-                          const isSubko = isSubkoBean(item);
-                          const isNiche = isSubkoNiche(item);
-                          const isOos = !item.in_stock || item.max_qty === 0;
-                          const effectiveLimit = getItemEffectiveLimit(item);
-
-                          return (
-                            <div key={item.item_zsku} className={`bg-white rounded-2xl p-4 shadow-sm border flex flex-col justify-between space-y-3 ${
-                              isOos ? 'border-red-200 bg-red-50/20' : 'border-stone-200'
-                            }`}>
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                  {item.brand && <span className="bg-stone-100 text-stone-800 text-[10px] font-black uppercase px-2 py-0.5 rounded-md">{item.brand.replace(/_/g, " ")}</span>}
-                                  {item.unit_size && item.unit_type && <span className="bg-amber-50 text-amber-900 text-[10px] font-bold px-2 py-0.5 rounded-md">{item.unit_size} {item.unit_type}</span>}
-                                  {item.max_qty === 0 && <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-md">Max: 0</span>}
-                                  {item.max_qty !== null && item.max_qty !== undefined && item.max_qty > 0 && !isSubko && (
-                                    <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded-md">Max: {item.max_qty}</span>
-                                  )}
-                                  {isNiche && <span className="bg-purple-100 text-purple-900 text-[10px] font-black px-2 py-0.5 rounded-md">Max: 1 / day (Monthly: 1–2)</span>}
-                                  {isSubko && !isNiche && <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md">Max: 1 / day</span>}
-                                </div>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${isOos ? 'bg-rose-100 text-rose-800' : 'bg-emerald-50 text-emerald-700'}`}>
-                                  {isOos ? "OUT OF STOCK" : "In Stock"}
-                                </span>
-                              </div>
-
-                              <div className="space-y-1">
-                                <h4 className={`font-extrabold text-base leading-snug ${isOos ? 'text-stone-500' : 'text-stone-900'}`}>{item.product_title}</h4>
-                                <div className="text-[11px] font-mono text-stone-500">SKU: {item.item_zsku} {item.barcode && `• Barcode: ${item.barcode}`}</div>
-                              </div>
-
-                              {isOos && (
-                                <div className="bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium p-2 rounded-xl">
-                                  ⚠️ Currently Out of Stock (Limit: 0)
-                                </div>
-                              )}
-
-                              <div className="pt-2.5 border-t border-stone-100 flex items-center justify-between">
-                                <span className="text-xs font-bold text-stone-500">Order Qty:</span>
-                                {isSupervisor ? (
-                                  <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-amber-50 text-amber-800 border border-amber-200">
-                                    👁️ View Only
-                                  </div>
-                                ) : isOos ? (
-                                  <div className="px-3.5 py-1.5 rounded-full font-black text-xs bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed">
-                                    OOS (Limit: 0)
-                                  </div>
-                                ) : qty === 0 ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => updateCart(item.item_zsku, 1, item)}
-                                    className={`px-4 py-1.5 rounded-full font-black text-xs shadow-sm ${
-                                      isNative ? "bg-[#1864AB] text-white hover:bg-[#13508A]" : "bg-[#6B0B20] text-white hover:bg-[#520818]"
-                                    }`}
-                                  >
-                                    + ADD
-                                  </button>
-                                ) : (
-                                  <div className="flex items-center space-x-1.5 bg-stone-100 p-1 rounded-full border border-stone-200">
-                                    <button type="button" onClick={() => updateCart(item.item_zsku, qty - 1, item)} className="w-7 h-7 rounded-full bg-white text-stone-800 font-black text-sm flex items-center justify-center">–</button>
-                                    <input
-                                      type="number"
-                                      min="0"
-                                      max={effectiveLimit || undefined}
-                                      value={qty}
-                                      onChange={e => updateCart(item.item_zsku, parseInt(e.target.value) || 0, item)}
-                                      className="w-12 text-center font-black text-sm bg-transparent outline-none"
-                                    />
-                                    <button type="button" onClick={() => updateCart(item.item_zsku, qty + 1, item)} className={`w-7 h-7 rounded-full text-white font-black text-sm flex items-center justify-center ${
-                                      isNative ? "bg-[#1864AB]" : "bg-[#6B0B20]"
-                                    }`}>+</button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </section>
-              );
-            })}
-        </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredPackaging.map(item => (
+                <ItemCard
+                  key={item.item_zsku}
+                  item={item}
+                  qty={cart[item.item_zsku] || 0}
+                  onUpdateQty={qty => updateCart(item.item_zsku, qty, item)}
+                  isSubkoBean={false}
+                  isSubkoNiche={false}
+                  limit={getItemEffectiveLimit(item)}
+                  isNative={isNative}
+                  isSupervisor={isSupervisor}
+                />
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
-      {/* FLOATING BOTTOM ORDER BAR */}
-      {totalUnits > 0 && !isSupervisor && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-3 bg-white border-t border-stone-200 shadow-2xl">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <div className="flex items-center space-x-2">
-                <span className="bg-[#FFF000] text-black font-black text-[11px] px-2 py-0.5 rounded-md">{totalUnits} Units</span>
-                <span className="text-xs font-bold text-stone-700">({totalSkus} SKUs)</span>
+      {/* STICKY BOTTOM ORDER BAR */}
+      {totalCartCount > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-stone-200 shadow-2xl p-4">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div>
+              <div className="text-xs text-stone-500 font-medium">Daily Replenishment Order</div>
+              <div className="text-base font-black text-stone-900">
+                {totalCartCount} {totalCartCount === 1 ? "unit" : "units"} selected
               </div>
-              <div className="text-xs font-black text-stone-900 truncate">Store: {selectedStore?.ds_name}</div>
             </div>
 
-            <div className="flex items-center space-x-2">
-              <button type="button" onClick={() => setIsOrderSummaryOpen(true)} className="bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-black px-3.5 py-3 rounded-2xl">
-                View Cart
-              </button>
+            <div className="flex items-center space-x-3">
               <button
                 type="button"
-                onClick={submitOrder}
-                disabled={isSubmitting}
-                className={`px-6 py-3 rounded-2xl font-black text-sm shadow-lg disabled:opacity-50 text-white ${
-                  isNative ? "bg-[#1864AB] hover:bg-[#13508A]" : "bg-[#6B0B20] hover:bg-[#520818]"
+                onClick={() => setCart({})}
+                className="text-xs font-bold text-stone-500 hover:text-stone-900 px-3 py-2"
+              >
+                Clear
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsOrderSummaryOpen(true)}
+                className={`font-black text-xs sm:text-sm px-6 py-3 rounded-2xl text-white shadow-lg transition active:scale-95 ${
+                  isNative ? "bg-[#1864AB] hover:bg-[#134e85]" : "bg-[#6B0B20] hover:bg-[#4d0717]"
                 }`}
               >
-                {isSubmitting ? "Submitting..." : "Submit Order →"}
+                Review Order ({totalCartCount}) →
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ORDER REVIEW MODAL */}
+      {/* ORDER SUMMARY MODAL */}
       {isOrderSummaryOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-xl p-6 max-h-[85vh] flex flex-col space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div className={`p-4 text-white flex items-center justify-between shrink-0 ${isNative ? "bg-[#1864AB]" : "bg-[#6B0B20]"}`}>
               <div>
-                <h3 className="text-lg font-black text-stone-900">Review Replenishment Order</h3>
-                <p className="text-xs text-stone-500">{selectedStore?.ds_name} ({selectedStore?.ds_code}) • {selectedStore?.store_type}</p>
+                <h3 className="font-black text-base">Confirm Daily Replenishment</h3>
+                <p className="text-xs text-white/80">{selectedStore?.ds_name} ({selectedStore?.ds_code})</p>
               </div>
-              <button onClick={() => setIsOrderSummaryOpen(false)} className="w-8 h-8 rounded-full bg-stone-100 font-bold flex items-center justify-center">✕</button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {Object.entries(cart)
-                .filter(([_, qty]) => qty > 0)
-                .map(([zsku, qty]) => {
-                  const it = items.find(i => i.item_zsku === zsku);
-                  return (
-                    <div key={zsku} className="flex items-center justify-between p-3 rounded-2xl bg-stone-50 border border-stone-100">
-                      <div className="min-w-0 flex-1 pr-2">
-                        <div className="text-xs font-black text-stone-900 truncate">{it?.product_title || zsku}</div>
-                        <div className="text-[10px] text-stone-400 font-mono">SKU: {zsku}</div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="number"
-                          min="0"
-                          max={it ? getItemEffectiveLimit(it) || undefined : undefined}
-                          value={qty}
-                          onChange={e => updateCart(zsku, parseInt(e.target.value) || 0, it)}
-                          className="w-14 text-center font-black text-xs border rounded-lg py-1 bg-white"
-                        />
-                        <button onClick={() => updateCart(zsku, 0, it)} className="text-stone-400 hover:text-red-600 text-xs font-bold px-1">✕</button>
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-
-            <div className="pt-3 border-t">
               <button
                 type="button"
+                onClick={() => setIsOrderSummaryOpen(false)}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {Object.entries(cart).filter(([_, q]) => q > 0).map(([sku, q]) => {
+                const it = items.find(i => i.item_zsku === sku);
+                return (
+                  <div key={sku} className="flex items-center justify-between bg-stone-50 p-3 rounded-2xl border border-stone-200">
+                    <div className="flex-1 min-w-0 pr-3">
+                      <div className="font-bold text-xs text-stone-900 truncate">{it?.product_title || sku}</div>
+                      <div className="text-[11px] text-stone-400 font-mono">{sku} • {it?.brand || "Brand"}</div>
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        onClick={() => updateCart(sku, q - 1, it)}
+                        className="w-7 h-7 rounded-lg bg-white border border-stone-300 font-bold text-xs text-stone-700"
+                      >
+                        -
+                      </button>
+                      <span className="font-black text-sm text-stone-900 w-6 text-center">{q}</span>
+                      <button
+                        onClick={() => updateCart(sku, q + 1, it)}
+                        className="w-7 h-7 rounded-lg bg-white border border-stone-300 font-bold text-xs text-stone-700"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="p-4 bg-stone-50 border-t border-stone-200 space-y-3 shrink-0">
+              <div className="flex items-center justify-between text-xs text-stone-600 font-semibold">
+                <span>Cut-off Deadline</span>
+                <span className="text-stone-900 font-black">6:30 PM UAE Time</span>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmitting || totalCartCount === 0}
                 onClick={submitOrder}
-                disabled={isSubmitting}
-                className={`w-full py-3.5 rounded-2xl font-black text-sm shadow-md text-white ${
-                  isNative ? "bg-[#1864AB] hover:bg-[#13508A]" : "bg-[#6B0B20] hover:bg-[#520818]"
+                className={`w-full py-3.5 rounded-2xl font-black text-sm text-white shadow-md transition disabled:bg-stone-300 ${
+                  isNative ? "bg-[#1864AB] hover:bg-[#134e85]" : "bg-[#6B0B20] hover:bg-[#4d0717]"
                 }`}
               >
-                {isSubmitting ? "Submitting Order..." : `Confirm & Place Order (${totalUnits} Units)`}
+                {isSubmitting ? "Submitting..." : `Confirm & Place Order (${totalCartCount} Units)`}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* SOP TRAINING MODAL */}
+      {/* BARISTA SOP MODAL */}
       {isSopOpen && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-stone-200">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden border border-stone-200">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-[#1864AB] via-[#0E4A86] to-[#6B0B20] text-white p-5 sm:p-6 flex items-center justify-between shrink-0">
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <span className="bg-[#FFF000] text-black text-[10px] font-black px-2 py-0.5 rounded uppercase">SOP Guide</span>
-                  <span className="text-xs text-blue-200 font-bold">Official UAE Cafe Standard</span>
-                </div>
-                <h3 className="text-lg sm:text-2xl font-black">☕ Barista Portal SOP & Training Guide</h3>
+            <div className="bg-[#1864AB] text-white p-5 flex items-center justify-between shrink-0">
+              <div>
+                <div className="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-0.5">Official Operations Standard</div>
+                <h3 className="font-black text-lg">Barista Portal SOP & Replenishment Manual</h3>
                 <p className="text-xs text-blue-100">Step-by-step instructions for daily stock replenishment & recipe compliance.</p>
               </div>
               <button
@@ -1129,8 +901,8 @@ export default function BaristaPortal() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl space-y-1">
                   <div className="text-[11px] font-black text-blue-800 uppercase">Step 1: Store Login</div>
-                  <div className="text-xs text-stone-700">Enter <code className="bg-white px-1 py-0.5 rounded text-[11px]">cafe-*@noon.com</code> and verify via 6-digit email OTP.</div>
-                  <div className="text-[10px] text-emerald-700 font-bold">🔒 Logged in for 7 days</div>
+                  <div className="text-xs text-stone-700">Enter <code className="bg-white px-1 py-0.5 rounded text-[11px]">cafe-*@noon.com</code> and click Enter Portal.</div>
+                  <div className="text-[10px] text-emerald-700 font-bold">🔒 Logged in for 30 days (1 Month)</div>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 p-3.5 rounded-2xl space-y-1">
                   <div className="text-[11px] font-black text-blue-800 uppercase">Step 2: Check Store</div>
@@ -1190,7 +962,7 @@ export default function BaristaPortal() {
                   <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
                     <li>Count physically on-hand stock before ordering.</li>
                     <li>You can submit orders <strong>anytime during the day as per UAE time</strong> (cut-off: <strong>6:30 PM UAE Time</strong>).</li>
-                    <li>Keep a 4-day buffer for packaging and cups.</li>
+                    <li>Keep a 2-day buffer for packaging and cups.</li>
                     <li>If shift updates an order, the system automatically takes the highest quantity.</li>
                   </ul>
                 </div>
@@ -1201,7 +973,7 @@ export default function BaristaPortal() {
                   <ul className="text-xs text-stone-700 space-y-1 list-disc pl-4">
                     <li>Never attempt to log in using another store's email.</li>
                     <li>Orders placed after 6:30 PM UAE time will automatically be considered for next-day processing only.</li>
-                    <li>Never share login OTP codes outside the store team.</li>
+                    <li>Ensure store emails are only accessed by authorized cafe baristas.</li>
                     <li>Do not order more than 1 unit of Subko specialty beans per day.</li>
                   </ul>
                 </div>
@@ -1231,6 +1003,128 @@ export default function BaristaPortal() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ItemCard({
+  item,
+  qty,
+  onUpdateQty,
+  isSubkoBean,
+  isSubkoNiche,
+  limit,
+  isNative,
+  isSupervisor,
+}: {
+  item: any;
+  qty: number;
+  onUpdateQty: (q: number) => void;
+  isSubkoBean: boolean;
+  isSubkoNiche: boolean;
+  limit: number | null;
+  isNative: boolean;
+  isSupervisor: boolean;
+}) {
+  const isOutOfStock = !item.in_stock || limit === 0;
+
+  return (
+    <div className={`bg-white rounded-3xl p-4 border transition flex flex-col justify-between shadow-sm hover:shadow-md ${
+      isOutOfStock ? "opacity-60 border-stone-200" : "border-stone-200"
+    }`}>
+      <div className="space-y-2.5">
+        {/* Badges */}
+        <div className="flex items-center justify-between gap-1.5">
+          <span className="text-[10px] font-black uppercase tracking-wider text-stone-400 font-mono">
+            {item.item_zsku}
+          </span>
+
+          <div className="flex items-center space-x-1 shrink-0">
+            {isSubkoNiche && (
+              <span className="bg-purple-100 text-purple-900 text-[10px] font-black px-2 py-0.5 rounded-full">
+                NICHE BLEND
+              </span>
+            )}
+            {isSubkoBean && !isSubkoNiche && (
+              <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-full">
+                SUBKO SPECIALTY
+              </span>
+            )}
+            {isOutOfStock ? (
+              <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                OUT OF STOCK
+              </span>
+            ) : limit !== null ? (
+              <span className="bg-stone-100 text-stone-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                Limit: {limit}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Image preview */}
+        {item.image_url ? (
+          <div className="h-32 w-full bg-stone-50 rounded-2xl flex items-center justify-center overflow-hidden border border-stone-100">
+            <img src={item.image_url} alt={item.product_title} className="h-full w-full object-contain p-2" />
+          </div>
+        ) : (
+          <div className="h-24 w-full bg-stone-50 rounded-2xl flex items-center justify-center text-stone-300 font-bold text-xs border border-stone-100">
+            No Image
+          </div>
+        )}
+
+        {/* Item Info */}
+        <div>
+          <div className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">{item.brand || "Standard"}</div>
+          <h3 className="font-bold text-sm text-stone-900 leading-snug line-clamp-2">{item.product_title}</h3>
+          {(item.unit_size || item.unit_type) && (
+            <div className="text-[11px] text-stone-500 font-medium mt-0.5">
+              Unit: {item.unit_size} {item.unit_type}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Action / Quantity Controls */}
+      <div className="pt-4 mt-2 border-t border-stone-100">
+        {isOutOfStock ? (
+          <button
+            disabled
+            className="w-full bg-stone-200 text-stone-400 text-xs font-bold py-2.5 rounded-xl cursor-not-allowed"
+          >
+            Out of Stock
+          </button>
+        ) : isSupervisor ? (
+          <div className="w-full bg-amber-50 text-amber-800 text-center text-[11px] font-bold py-2 rounded-xl border border-amber-200">
+            Inspection Mode (View Only)
+          </div>
+        ) : qty > 0 ? (
+          <div className="flex items-center justify-between bg-stone-50 p-1 rounded-2xl border border-stone-200">
+            <button
+              onClick={() => onUpdateQty(qty - 1)}
+              className="w-9 h-9 rounded-xl bg-white border border-stone-300 text-stone-800 font-black text-sm flex items-center justify-center hover:bg-stone-100 active:scale-95"
+            >
+              -
+            </button>
+            <span className="font-black text-stone-900 text-sm px-2">{qty}</span>
+            <button
+              onClick={() => onUpdateQty(qty + 1)}
+              className="w-9 h-9 rounded-xl bg-white border border-stone-300 text-stone-800 font-black text-sm flex items-center justify-center hover:bg-stone-100 active:scale-95"
+            >
+              +
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => onUpdateQty(1)}
+            className={`w-full py-2.5 rounded-2xl text-xs font-black text-white transition active:scale-95 shadow-sm ${
+              isNative ? "bg-[#1864AB] hover:bg-[#134e85]" : "bg-[#6B0B20] hover:bg-[#4d0717]"
+            }`}
+          >
+            + Add to Order
+          </button>
+        )}
+      </div>
     </div>
   );
 }
